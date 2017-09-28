@@ -18,7 +18,7 @@ router bgp {{ as_number }}
  bgp router-id {{ identifier }}
  no bgp default ipv4-unicast
  neighbor evpn-peer peer-group
- neighbor evpn-peer remote-as 2501
+ neighbor evpn-peer remote-as {{ as_number }}
  neighbor evpn-peer update-source gre1
  neighbor evpn-peer capability extended-nexthop
  neighbor {{ rr_identifier }} peer-group evpn-peer
