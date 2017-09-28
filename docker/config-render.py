@@ -40,19 +40,6 @@ def config_render_frr_conf(config, of) :
     frr_conf = tpl.render(d)
     print >> of, frr_conf
 
-def config_render_ipsec_conf(config, of) :
-        
-    d = {
-        "locator" : get_ip(config.get("address", "locator_interface"))
-    }
-
-    tmp = os.path.join(os.path.dirname(__file__), "templates")
-    env = Environment(loader = FileSystemLoader(tmp, encoding = "utf-8"))
-    tpl = env.get_template("ipsec.conf.template")
-
-    ipsec_conf = tpl.render(d)
-    print >> of, ipsec_conf
-
     
 def config_render_ipsec_secrets(config, of) :
 
@@ -88,14 +75,11 @@ if __name__ == '__main__' :
 
     if options.stdout :
         of_frr = sys.stdout
-        of_ipsec = sys.stdout
         of_ipsec_secrets = sys.stdout
     else :
         of_frr = open("/etc/frr/frr.conf", "w")
-        of_ipsec = open("/usr/local/etc/ipsec.conf", "w")
         of_ipsec_secrets = open("/usr/local/etc/ipsec.secrets", "w")
 
         
     config_render_frr_conf(config, of_frr)
-    config_render_ipsec_conf(config, of_ipsec)
     config_render_ipsec_secrets(config, of_ipsec_secrets)

@@ -70,7 +70,7 @@ RUN cd ${workdir}/strongswan	\
 	&& make	-j 4		\
 	&& make install		\
 	&& rm -f /usr/local/etc/ipsec.conf
-
+ADD ipsec.conf /usr/local/etc/ipsec.conf
 
 # setup Config Render
 ADD templates ${workdir}/templates

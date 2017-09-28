@@ -98,8 +98,8 @@ conn dmvpn
 
 #### 2. Prepare spoke router
 
-Nante-WAN provides a docker images that performs a spoke router of
-EVPN/VXLAN over DMVPN networks. This docker images must runs on host
+Nante-WAN provides a docker image that performs a spoke router of
+EVPN/VXLAN over DMVPN networks. This docker images must run on host
 network stacks to manipulate routing table entries even if it is
 insecure.
 
