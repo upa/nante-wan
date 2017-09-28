@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
 	git autoconf automake libtool make gawk libreadline-dev \
 	texinfo dejagnu pkg-config libpam0g-dev libjson-c-dev bison flex \
 	python-pytest libc-ares-dev python3-dev libsystemd-dev	\
-	libgmp-dev openssl gperf
+	libgmp-dev openssl gperf python-jinja2
 
 # setup FRRouting with the cumulus extension for EVPN/VXLAN
 RUN cd ${workdir}	\
@@ -53,7 +53,6 @@ RUN cd ${workdir}	\
 	&& install -m 644 -o frr -g frr tools/etc/frr/vtysh.conf \
 					/etc/frr/vtysh.conf \
 	&& rm -f /etc/frr/daemons
-
 ADD daemons /etc/frr/daemons
 
 
@@ -73,4 +72,10 @@ RUN cd ${workdir}/strongswan	\
 	&& rm -f /usr/local/etc/ipsec.conf
 ADD ipsec.conf /usr/local/etc/ipsec.conf
 
-CMD bash -c "/usr/lib/frr/frr start && ipsec start && bash"
+
+# setup Config Render
+ADD templates ${workdir}/templates
+ADD config-render.py ${workdir}/config-render.py
+
+
+CMD bash -c "/root/config-render.py /etc/nante-wan.conf && /usr/lib/frr/frr start && ipsec start && bash"

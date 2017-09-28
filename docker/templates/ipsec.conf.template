@@ -1,0 +1,14 @@
+
+# IPsec configuration for dmvpn
+
+config setup
+
+conn dmvpn
+	left={{ locator }}
+	right=%any
+	leftprotoport=gre
+	rightprotoport=gre
+	type=transport
+	authby=secret
+	auto=add
+	keyingtries=%forever
