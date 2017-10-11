@@ -5,10 +5,12 @@ import os
 import sys
 import json
 import time
+import threading
 import subprocess
 
 from optparse import OptionParser
-from logging import getLogger, DEBUG, StreamHandler
+from logging import getLogger, DEBUG, StreamHandler, Formatter
+from logging.handlers import SysLogHandler
 
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -16,14 +18,26 @@ requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 logger = getLogger(__name__)
 logger.setLevel(DEBUG)
-logger.addHandler(StreamHandler())
+stream = StreamHandler()
+syslog = SysLogHandler(address = "/dev/log")
+syslog.setFormatter(Formatter("sdwconfig: %(message)s"))
+logger.addHandler(stream)
+logger.addHandler(syslog)
 logger.propagate = False
+
 
 ipcmd = "/bin/ip"
 brcmd = "/sbin/bridge"
 
 localaddr = None
 bridge_name = "bridge"
+
+# ConfigParser Option
+options = None
+
+
+from flask import Flask
+app = Flask(__name__)
 
 
 class Port() :
@@ -103,6 +117,15 @@ class Bridge() :
         for port in self.ports.values() :
             self.vlans.add(port.vlan)
 
+    def vlan_set_validate(self) :
+        # check this vlan has vxlan interface
+        rem = []
+        for vlan in self.vlans :
+            if not os.path.exists("/sys/class/net/vxlan%d" % vlan) :
+                rem.append(vlan)
+        for v in rem :
+            self.vlans.remove(v)
+
     def add_vxlan(self, vlan) :
         # add new vxlan interface
         vxlan_name = "vxlan%d" % vlan
@@ -153,16 +176,26 @@ class Bridge() :
         
         """
         
-        self.name = jsondata["name"]
-        for jport in jsondata["ports"] :
+        try :
+            self.name = jsondata["name"]
+            for jport in jsondata["ports"] :
             
-            self.add_port(Port(jport["name"],
-                               master = self.name,
-                               vlan = jport["vlan"]))
+                if not os.path.exists("/sys/class/net/%s" % jport["name"]) :
+                    logger.error("Port '%s' does not exist" % jport["name"])
+                    continue
 
-        # update vlan set of this bridge
-        self.update_vlan_set()
+                self.add_port(Port(jport["name"],
+                                   master = self.name,
+                                   vlan = jport["vlan"]))
 
+            # update vlan set of this bridge
+            self.update_vlan_set()
+
+        except Exception as e:
+            logger.error("Invalid JSON file : %s" % e)
+            return False
+
+        return True
 
     def load_from_os(self) :
 
@@ -193,55 +226,59 @@ class Bridge() :
             
         # update vlan set of this bridge
         self.update_vlan_set()
+        self.vlan_set_validate()
 
 
 
 def sdwconfig_config(bridge_now, bridge_new) :
     
+    logger.info("Start to configure bridge '%s'" % bridge_now.name)
     #logger.debug("now: %s" % bridge_now)
     #logger.debug("new: %s" % bridge_new)
 
     # 1. remove unnecessary vlans
     for vlan in bridge_now.vlans - bridge_new.vlans :
-        logger.debug("remove vlan %d", vlan)
+        logger.debug("- remove vlan %d", vlan)
         bridge_new.delete_vxlan(vlan)
         
     # 2. create new vlans
     for vlan in bridge_new.vlans - bridge_now.vlans :
-        logger.debug("add vlan %d", vlan)
+        logger.debug("- add vlan %d", vlan)
         bridge_new.add_vxlan(vlan)
 
 
     # 3. check removed or changed ports and remove them
     for now_port in bridge_now.list_ports() :
         if not bridge_new.find_port(now_port.name) :
-            logger.debug("destroy %s" % now_port)
+            logger.debug("- destroy %s" % now_port)
             now_port.destroy()
 
-        if now_port.diff_check(bridge_new.find_port(now_port.name)) :
+        elif now_port.diff_check(bridge_new.find_port(now_port.name)) :
             now_port.destroy()
 
     # 4. check new or changed ports and setup them
     for new_port in bridge_new.list_ports() :
         if not bridge_now.find_port(new_port.name) :
-            logger.debug("setup %s" % new_port)
+            logger.debug("- setup %s" % new_port)
             new_port.setup()
 
-        if new_port.diff_check(bridge_now.find_port(new_port.name)) :
-            logger.debug("setup %s" % new_port)
+        elif new_port.diff_check(bridge_now.find_port(new_port.name)) :
+            logger.debug("- setup %s" % new_port)
             new_port.setup()
 
 
 
 def sdwconfig_from_file(options) :
 
-    jsonstring = json.load(open(options.jsonfile, 'r'))
+    jsondata = json.load(open(options.jsonfile, 'r'))
 
     bridge_now = Bridge(bridge_name)
     bridge_now.load_from_os()
 
     bridge_new = Bridge(bridge_name)
-    bridge_new.load_from_json(jsonstring)
+    ret = bridge_new.load_from_json(jsondata)
+    if not ret :
+        return False
 
     sdwconfig_config(bridge_now, bridge_new)
 
@@ -257,18 +294,18 @@ def sdwconfig_from_url(options) :
             if res.status_code == 200 and res.json() :
                 break
             else :
-                logger.error("failed to GET '%s', sleep %d seconds: %s",
+                logger.error("Failed to GET '%s', sleep %d seconds: %s",
                              options.url, options.failedinterval,
                              "status_code is %d" % res.status_code)
                 time.sleep(options.failedinterval)
 
         except requests.exceptions.RequestException as e :
-            logger.error("failed to GET '%s', sleep %d seconds: %s",
+            logger.error("Failed to GET '%s', sleep %d seconds: %s",
                          options.url, options.failedinterval, e)
             time.sleep(options.failedinterval)
     
         except Exception as e :
-            logger.error("failed to GET '%s', sleep %d seconds: %s",
+            logger.error("Failed to GET '%s', sleep %d seconds: %s",
                          options.url, options.failedinterval, e)
             time.sleep(options.failedinterval)
 
@@ -277,10 +314,12 @@ def sdwconfig_from_url(options) :
     bridge_now.load_from_os()
 
     bridge_new = Bridge(bridge_name)
-    bridge_new.load_from_json(res.json())
+    ret = bridge_new.load_from_json(res.json())
+    if not ret :
+        return False
 
     sdwconfig_config(bridge_now, bridge_new)
-
+    return True
 
 
 def sdwconfig_loop(options) :
@@ -294,7 +333,30 @@ def sdwconfig_loop(options) :
                          (options.failedinterval, e.__class__, e))
             time.sleep(options.failedinterval)
 
+
         
+@app.route("/update_from_url", methods = [ "GET" ])
+def sdwconfig_rest_update_from_url() :
+    logger.info("Update trigger. start to obtain json from %s" % options.url)
+    ret = sdwconfig_from_url(options)
+    if ret :
+        return "Ok!", 200
+    else :
+        return "Failed", 400
+
+def sdwconfig_rest_start(options) :
+    logger.info("Start REST Gateway on %s:%d" % (options.bind_addr,
+                                            options.bind_port))
+    th = threading.Thread(name = "rest_gw", target = app.run,
+                          kwargs = {
+                              "threaded" : True,
+                              "host" : options.bind_addr,
+                              "port" : options.bind_port,
+                          })
+    th.start()
+
+
+
 if __name__ == "__main__" :
 
     desc = "usage: %prog [options]"
@@ -323,12 +385,23 @@ if __name__ == "__main__" :
     )
     parser.add_option(
         "-l", "--local-addr", type = "string", default = None,
-        dest = "localaddr", help = "local address"
+        dest = "local_addr", help = "vxlan local address"
+    )
+    parser.add_option(
+        "-b", "--bind-addr", type = "string", default = "127.0.0.1",
+        dest = "bind_addr", help = "bind address of REST gateway"
+    )
+    parser.add_option(
+        "-p", "--bind-port", type = "int", default = 80,
+        dest = "bind_port", help = "bind port of REST gateway"
     )
 
         
     (options, args) = parser.parse_args()
-    localaddr = options.localaddr
+    localaddr = options.local_addr
+
+    # start rest gateway
+    sdwconfig_rest_start(options)
 
     if options.jsonfile :
         sdwconfig_from_file(options)
