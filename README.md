@@ -154,3 +154,41 @@ root@frr3:/#
 # you can see and operate frr through vtysh in the container.
 ```
 
+
+
+#### /etc/rc.local example
+
+READMEはそのうち。
+
+```shell
+link=enp1s0
+inner=10.0.0.10
+
+modprobe af_key
+
+ip tunnel add gre1 mode gre key 2501 ttl 64 dev $link
+ip addr add $inner/32 dev gre1
+ip link set gre1 up
+
+
+# Setup NFLOG for nhrpd
+iptables -A FORWARD -i gre1 -o gre1 \
+        -m hashlimit --hashlimit-upto 4/minute --hashlimit-burst 1 \
+        --hashlimit-mode srcip,dstip --hashlimit-srcmask 16 \
+        --hashlimit-dstmask 16 --hashlimit-name loglimit-0 \
+        -j NFLOG --nflog-group 1 --nflog-range 128
+
+
+
+# Start sdwconfig container managing bridging config
+docker run -t --restart=always --privileged --net=host \
+	-v /home/upa/work/nante-wan/sdwconfig.conf:/etc/sdwconfig.conf \
+	-v /dev/log:/dev/log \
+	upaa/sdwconfig  &
+
+
+# Start nante-wan container managing routing
+docker run -t --restart=always --privileged --net=host \
+	-v /home/upa/nante-wan.conf:/etc/nante-wan.conf \
+	upaa/nante-wan &
+```
