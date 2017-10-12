@@ -5,8 +5,12 @@ import os
 import sys
 import json
 import time
+import struct
+import fcntl
+import struct
 import threading
 import subprocess
+import configparser
 
 from optparse import OptionParser
 from logging import getLogger, DEBUG, StreamHandler, Formatter
@@ -38,6 +42,15 @@ options = None
 
 from flask import Flask
 app = Flask(__name__)
+
+
+def get_ip(ifname):
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    return socket.inet_ntoa(fcntl.ioctl(
+        s.fileno(),
+        0x8915,  # SIOCGIFADDR
+        struct.pack('256s', ifname[:15])
+    )[20:24])
 
 
 class Port() :
@@ -356,6 +369,21 @@ def sdwconfig_rest_start(options) :
     th.start()
 
 
+def load_config(options) :
+
+    # special config overwrider for nante-wan
+
+    config = ConfigParser.ConfigParser()
+    config.read(options.configfile)
+
+    ip_addr = get_ip(config.get("sdwconfig", "identifier_interface"))
+
+    options.url = "%s/%s.json" % (config.get("sdwconfig", "json_url_prefix"),
+                                  ipaddr)
+    options.local_addr = ip_addr
+    options.bind_addr = ip_addr
+
+
 
 if __name__ == "__main__" :
 
@@ -395,8 +423,16 @@ if __name__ == "__main__" :
         "-p", "--bind-port", type = "int", default = 80,
         dest = "bind_port", help = "bind port of REST gateway"
     )
+    parser.add_option(
+        "-c", "--config-file", type = "string", default = None,
+        dest = "configfile", help = "config file (high prioirity)"
+    )
 
         
+    if options.configifle :
+        load_config(options)
+
+
     (options, args) = parser.parse_args()
     localaddr = options.local_addr
 
