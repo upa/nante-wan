@@ -148,20 +148,23 @@ class Bridge() :
         # add new vxlan interface
         vxlan_name = "vxlan%d" % vlan
 
-        # check does vxlan interface exist. if not, make it.
-        if os.path.exists("/sys/class/net/%s" % vxlan_name) :
-            return
+        cmds = []
 
-        cmds = [
-            [ipcmd, "link", "add", vxlan_name,
-             "type", "vxlan", "nolearning", "dstport", 4789,
-             "id", vlan, "local", localaddr],
+        # check does vxlan interface exist. if not, make it.
+        if not os.path.exists("/sys/class/net/%s" % vxlan_name) :
+            cmds.append(
+                [ipcmd, "link", "add", vxlan_name,
+                 "type", "vxlan", "nolearning", "dstport", 4789,
+                 "id", vlan, "local", localaddr]
+            )
+
+        cmds.append(
             [ipcmd, "link", "set", "dev", vxlan_name, "master", self.name],
             [brcmd, "vlan", "add", "vid", vlan, "dev", self.name, "self"],
             [brcmd, "vlan", "add", "vid", vlan, "dev", vxlan_name,
              "untagged", "pvid"],
             [ipcmd, "link", "set", "up", "dev", vxlan_name]
-        ]
+        )
         for cmd in cmds :
             subprocess.check_output(list(map(str, cmd)))
 
