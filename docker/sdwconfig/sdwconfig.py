@@ -158,13 +158,16 @@ class Bridge() :
                  "id", vlan, "local", localaddr]
             )
 
-        cmds.append(
+        cs = [
             [ipcmd, "link", "set", "dev", vxlan_name, "master", self.name],
             [brcmd, "vlan", "add", "vid", vlan, "dev", self.name, "self"],
             [brcmd, "vlan", "add", "vid", vlan, "dev", vxlan_name,
              "untagged", "pvid"],
             [ipcmd, "link", "set", "up", "dev", vxlan_name]
-        )
+        ]
+        for c in cs :
+            cmds.append(c)
+
         for cmd in cmds :
             subprocess.check_output(list(map(str, cmd)))
 

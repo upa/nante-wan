@@ -1,0 +1,27 @@
+frr defaults traditional
+hostname {{ hostname }}
+!
+service integrated-vtysh-config
+!
+log file /var/log/frr/frr.log
+!
+router bgp {{ as_number }}
+ bgp router-id {{ router_id }}
+ no bgp default ipv4-unicast
+ neighbor evpn-peer peer-group
+ neighbor evpn-peer remote-as {{ as_number }}
+ neighbor evpn-peer update-source {{ update_source }}
+ neighbor evpn-peer capability extended-nexthop
+ neighbor {{ route_reflector }} peer-group evpn-peer
+ !
+ address-family l2vpn evpn
+  neighbor evpn-peer activate
+  advertise-all-vni
+ exit-address-family
+ vnc defaults
+  response-lifetime 3600
+  exit-vnc
+!
+line vty
+!
+end
