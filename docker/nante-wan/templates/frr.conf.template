@@ -23,6 +23,11 @@ router bgp {{ as_number }}
  neighbor evpn-peer capability extended-nexthop
  neighbor {{ rr_identifier }} peer-group evpn-peer
  !
+ address-family ipv4 unicast
+  neighbor evpn-peer activate
+  neighbor evpn-peer soft-reconfiguration inbound
+ exit-address-family
+ !
  address-family l2vpn evpn
   neighbor evpn-peer activate
   advertise-all-vni
