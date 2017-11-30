@@ -4,11 +4,11 @@ ARG workdir="/root"
 
 # install required packages and usuful applications
 RUN apt-get update && apt-get install -y \
-	iputils-ping iproute2 kmod \
+	wget iputils-ping iproute2 kmod \
 	git autoconf automake libtool make gawk libreadline-dev \
 	texinfo dejagnu pkg-config libpam0g-dev libjson-c-dev bison flex \
 	python-pytest libc-ares-dev python3-dev libsystemd-dev	\
-	libgmp-dev openssl gperf python-jinja2
+	libgmp-dev openssl gperf python3-jinja2	
 
 # setup FRRouting with the cumulus extension for EVPN/VXLAN
 RUN cd ${workdir}	\
@@ -17,8 +17,9 @@ RUN cd ${workdir}	\
 	&& adduser --system --ingroup frr --home /var/run/frr/	\
 	   --gecos "FRR suite" --shell /sbin/nologin frr	\
 	&& usermod -a -G frrvty frr	\
-	&& git clone --depth=1 https://github.com/frrouting/frr.git frr	\
+	&& git clone https://github.com/frrouting/frr.git frr	\
 	&& cd frr	\
+	&& git checkout -b itworks 67c0a9206ce9b50dacb6561e7dccdc0ae8e7fc43 \
 	&& ./bootstrap.sh	\
 	&& ./configure \
 	    --prefix=/usr \
@@ -53,8 +54,8 @@ RUN cd ${workdir}	\
 	&& install -m 644 -o frr -g frr tools/etc/frr/vtysh.conf \
 					/etc/frr/vtysh.conf \
 	&& rm -f /etc/frr/daemons
-ADD daemons /etc/frr/daemons
 
+ADD daemons /etc/frr/daemons
 
 # setup StrongSwan
 RUN cd ${workdir}	\

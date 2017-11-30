@@ -1,0 +1,6 @@
+{
+	"name" : "bridge",
+	"ports" : [
+		{ "name" : "vetha", "vlan" : 10 }
+	]
+}

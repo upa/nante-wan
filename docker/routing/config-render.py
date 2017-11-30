@@ -1,44 +1,45 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import os
 import sys
 import socket
 import fcntl
 import struct
-import ConfigParser
+import configparser
 from optparse import OptionParser
 from jinja2 import Environment, FileSystemLoader
 
 
-def get_ip(ifname):
-    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    return socket.inet_ntoa(fcntl.ioctl(
-            s.fileno(),
-            0x8915,  # SIOCGIFADDR
-            struct.pack('256s', ifname[:15])
-    )[20:24])
-
 
 def config_render_frr_conf(config, of) :
 
-    identifier = get_ip
-        
-    d = {
-        "hostname" : config.get("general", "hostname"),
-        "as_number" : config.get("general", "as_number"),
-        "router_id" : config.get("address", "router_id"),
-        "update_source" : config.get("address", "update_source"),
-        "route_reflector" : config.get("address", "route_reflector")
-    }
+    d = { "dmvpn_addr" : config.get("general", "dmvpn_addr")}
+
+    for param in config["routing"] :
+        d[param] = config["routing"][param]
 
     tmp = os.path.join(os.path.dirname(__file__), "templates")
     env = Environment(loader = FileSystemLoader(tmp, encoding = "utf-8"))
     tpl = env.get_template("frr.conf.template")
 
     frr_conf = tpl.render(d)
-    print >> of, frr_conf
+    print(frr_conf, file = of)
 
     
+def config_render_ipsec_secrets(config, of) :
+
+    d = {
+            "ipsec_secret" : config.get("routing", "ipsec_secret")
+    }
+
+    tmp = os.path.join(os.path.dirname(__file__), "templates")
+    env = Environment(loader = FileSystemLoader(tmp, encoding = "utf-8"))
+    tpl = env.get_template("ipsec.secrets.template")
+
+    ipsec_secrets = tpl.render(d)
+    print(ipsec_secrets, file = of)
+
+
 
 if __name__ == '__main__' :
 
@@ -51,15 +52,19 @@ if __name__ == '__main__' :
     try :
             ini_file = args.pop()
     except :
-            print "config file is not specified"
+            print("config file is not specified")
             sys.exit()
 
-    config = ConfigParser.ConfigParser()
+    config = configparser.ConfigParser()
     config.read(ini_file)
 
     if options.stdout :
         of_frr = sys.stdout
+        of_ipsec_secrets = sys.stdout
     else :
         of_frr = open("/etc/frr/frr.conf", "w")
+        of_ipsec_secrets = open("/usr/local/etc/ipsec.secrets", "w")
 
+        
     config_render_frr_conf(config, of_frr)
+    config_render_ipsec_secrets(config, of_ipsec_secrets)

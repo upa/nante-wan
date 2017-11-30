@@ -1,5 +1,4 @@
 frr defaults traditional
-hostname {{ hostname }}
 !
 service integrated-vtysh-config
 !
@@ -7,21 +6,21 @@ log file /var/log/frr/frr.log
 !
 interface gre1
  description dmvpn
- ip address {{ identifier }}/32
+ ip address {{ dmvpn_addr }}/32
  ip nhrp network-id 1
- ip nhrp nhs {{ nhs_identifier }} nbma {{ nhs_locator }}
+ ip nhrp nhs {{ nhs_addr }} nbma {{ nhs_nbma_addr }}
  ip nhrp shortcut
  tunnel protection vici profile dmvpn
- tunnel source {{ locator_interface }}
+ tunnel source {{ wan_interface }}
 !
 router bgp {{ as_number }}
- bgp router-id {{ identifier }}
+ bgp router-id {{ dmvpn_addr }}
  no bgp default ipv4-unicast
  neighbor evpn-peer peer-group
  neighbor evpn-peer remote-as {{ as_number }}
- neighbor evpn-peer update-source gre1
+ neighbor evpn-peer update-source {{ dmvpn_interface  }}
  neighbor evpn-peer capability extended-nexthop
- neighbor {{ rr_identifier }} peer-group evpn-peer
+ neighbor {{ rr_addr }} peer-group evpn-peer
  !
  address-family ipv4 unicast
   neighbor evpn-peer activate

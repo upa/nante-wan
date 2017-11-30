@@ -1,8 +1,0 @@
-{
-	"name" : "bridge",
-	"ports" : [
-		{ "name" : "enp2s0", "vlan" : 10 },
-		{ "name" : "enp3s0", "vlan" : 998 },
-		{ "name" : "enp4s0", "vlan" : 999 }
-	]
-}

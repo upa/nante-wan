@@ -8,6 +8,6 @@ RUN apt-get update && apt-get install -y \
 
 
 # setup sdwconfig
-ADD sdwconfig.py ${workdir}/sdwconfig.py
+ADD portconfig.py ${workdir}/portconfig.py
 
-CMD bash -c "/root/sdwconfig.py -c /etc/sdwconfig.conf"
+CMD bash -c "/root/portconfig.py /etc/nante-wan.conf"
