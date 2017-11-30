@@ -1,194 +1,71 @@
 
-### なんちゃってSD-WAN
+Nante-WAN: なんちゃってSD-WAN
+==============================
 
-Something like SD-WAN based on EVPN/VXLAN over DMVPN powered by FRRouting.
+Nante-WAN is yet another SD-WAN solution by open source software:
+Linux and [FRRouting](https://frrouting.org/). Nante-WAN provides
+NAT-traversal, Multipoint, Encrypted Layer-2 overlay networks by using
+DMVPN (Dynamic Multipoint VPN) and VXLAN.
+
+The data plane of Nante-WAN is VXLAN over DMVPN/IPsec overlay network
+for achieving such functionalities. DMVPN provides multipoint layer-3
+overlay, and IPsec provides packet encryption and
+NAT-traversal. Moreover, VXLAN encapsulates Ethernet frames in IP
+headers, which are inner IP headers of the DMVPN overlay.
+
+The control plane of Nante-WAN is composed of FRRouting that is a fork
+of Quagga. Nante-WAN uses EVPN for VXLAN FDB exchange and NHRP for
+DMVPN.
 
 
-
-#### 1. Prepare hub router
-
-A hub router performs a Route Reflector (RR) for EVPN/VXLAN and Next
-Hop Server for DMVPN. FRRouting can perform those roles (NOTE:
---enable-cumulus option in configure script is required to use EVPN).
-
-Example configurations are show below.
-- Hub Host information
-    - Physical interface : eth0
-    - Physical address : 192.168.0.100
-    - DMVPN interface : gre1
-    - DMVPN inner address : 10.0.0.100
-
-From a viewpoint of overlay networking like LISP, we can regard
-192.168.0.100 as a locator address and 10.0.0.100 as an identifier of
-the hub router.
-
-DMVPN (nhrpd) provides a dynamic multi-point virtual network over
-physical networks such as the Internet. DMVPN leverages IPsec, so that
-this DMVPN can cross NAT boxes. bgpd listen on gre1 interface and
-exchange route informations over the DMVPN. VXLAN encapsulated packets
-are also delivered through the DMVPN.
+#### Overview of Nante-Wan overlay
+![Overview of Nante-WAN Overlay](https://raw.githubusercontent.com/wiki/upa/nante-wan/fig/nante-wan-overlay.png)
 
 
 
-```shell-session
-# First of All, create a gre interface for DMVPN.
-# Details are described in the document https://github.com/FRRouting/frr/blob/master/nhrpd/README.nhrpd
-ip tunnel add gre1 mode gre key 2501 ttl 64 dev eth0
-ip addr add 10.0.0.100/32 dev gre1
-ip link set gre1 up
-iptables -A FORWARD -i gre1 -o gre1 \
-        -m hashlimit --hashlimit-upto 4/minute --hashlimit-burst 1 \
-        --hashlimit-mode srcip,dstip --hashlimit-srcmask 16 \
-        --hashlimit-dstmask 16 --hashlimit-name loglimit-0 \
-        -j NFLOG --nflog-group 1 --nflog-range 128
-```
+## Quick Start
 
-```
-# FRR EVPN/VXLAN RR and DMVPN config
-!
-interface gre1
- description DMVPN-Inner
- ip address 10.0.0.100/32
- ip nhrp network-id 2501
- ip nhrp redirect
- tunnel protection vici profile dmvpn
- tunnel source eth0
-!
-router bgp 65000
- bgp router-id 10.0.0.100
- no bgp default ipv4-unicast
- bgp cluster-id 0.0.0.1
- neighbor evpn-test peer-group
- neighbor evpn-test remote-as 2501
- neighbor evpn-test update-source gre1
- neighbor evpn-test capability extended-nexthop
- bgp listen range 10.0.0.0/24 peer-group evpn-test
- !
- address-family l2vpn evpn
-  neighbor evpn-test activate
-  neighbor evpn-test route-reflector-client
-  advertise-all-vni
- exit-address-family
- vnc defaults
-  response-lifetime 3600
-  exit-vnc
-!
-```
+Nante-WAN edge device components are packaged as docker
+containers. So, you can (easily?) test this yet another SD-WAN.
 
-```
-# ipsec.conf for the patched strongswan
-conn dmvpn
-        left=192.168.0.100
-        right=%any
-        leftprotoport=gre
-        rightprotoport=gre
-        type=transport
-        authby=secret
-        auto=add
-        keyingtries=%forever
+
+### 1. Setup Route Reflector and Next Hop Server
+
+[RR/NHRP description here]
+
+
+### 2. Prepare a config server (a.k.a orchestrator)
+
+[Config server description here]
+
+
+### 3. Edit nante-wan.conf 
+
+[Config file description here]
+
+```bash
+$ git clone https://github.com/upa/nante-wan.git
+$ cd nante-wan
+$ vim nante-wan.conf
 ```
 
 
-```
-# ipsec.secrets
-: PSK "ipsec password"
-```
+### 4. Run
+
+start.py does all things to start nante-wan at CE.
+
+* create GRE interface
+* create Bridge interface
+* setup NFLOG for NHRP redirect/shortcut
+* run containers
 
 
+```bash
+$ docker pull upaa/nante-wan-routing
+$ docker pull upaa/nante-wan-portconfig
 
-#### 2. Prepare spoke router
-
-Nante-WAN provides a docker image that performs a spoke router of
-EVPN/VXLAN over DMVPN networks. This docker images must run on host
-network stacks to manipulate routing table entries even if it is
-insecure.
-
-To execute the docker image, 1. create gre interface for DMVPN as same
-as the hub host and 2.  create a config file for nante-WAN.
-
-- Example spoke host information
-    - Physical interface : eth0
-    - Physical address : 192.168.0.10
-    - DMVPN interface : gre1
-    - DMVPN inner address : 10.0.0.10
-
-
-```shell-session
-# @ Spoke Host
-ip tunnel add gre1 mode gre key 2501 ttl 64 dev eth0
-ip addr add 10.0.0.10/32 dev gre1
-ip link set gre1 up
-iptables -A FORWARD -i gre1 -o gre1 \
-        -m hashlimit --hashlimit-upto 4/minute --hashlimit-burst 1 \
-	--hashlimit-mode srcip,dstip --hashlimit-srcmask 16 \
-	--hashlimit-dstmask 16 --hashlimit-name loglimit-0 \
-	-j NFLOG --nflog-group 1 --nflog-range 128
-
-
-# nante-wan.conf is an example to configure the spoke host in accordance with this example.
-cat nante-wan.conf
-
-
-# pull the docker image and execute it.
-# After docker-run, frr and ipsec daemons start
-docker pull upaa/nante-wan
-docker run -it --rm --privileged --net=host -v `pwd`/nante-wan.conf:/etc/nante-wan.conf upaa/nante-wan
-Starting Frr daemons (prio:10):. zebra2017/09/28 10:30:12 warnings: ZEBRA: Disabling MPLS support (no kernel support)
-. bgpd. nhrpdnhrpd[36]: nhrpd 3.1-dev-Nante-WAN-g67c0a92 starting: vty@2610
-.
-Starting Frr monitor daemon: watchfrrwatchfrr[42]: watchfrr 3.1-dev-Nante-WAN-g67c0a92 watching [zebra bgpd nhrpd]
-watchfrr[42]: bgpd state -> up : connect succeeded
-watchfrr[42]: zebra state -> up : connect succeeded
-watchfrr[42]: nhrpd state -> up : connect succeeded
-watchfrr[42]: Watchfrr: Notifying Systemd we are up and running
-.
-Exiting from the script
-Starting strongSwan 5.5.1dr1 IPsec [starter]...
-ipsec_starter[46]: Starting strongSwan 5.5.1dr1 IPsec [starter]...
-
-root@frr3:/# ipsec_starter[59]: charon (62) started after 20 ms
-root@frr3:/#
-root@frr3:/#
-
-
-# you can see and operate frr through vtysh in the container.
+# in nante-wan directory
+$ sudo ./start.py nante-wan.conf
 ```
 
 
-
-#### /etc/rc.local example
-
-READMEはそのうち。
-
-```shell
-link=enp1s0
-inner=10.0.0.10
-
-modprobe af_key
-
-ip tunnel add gre1 mode gre key 2501 ttl 64 dev $link
-ip addr add $inner/32 dev gre1
-ip link set gre1 up
-
-
-# Setup NFLOG for nhrpd
-iptables -A FORWARD -i gre1 -o gre1 \
-        -m hashlimit --hashlimit-upto 4/minute --hashlimit-burst 1 \
-        --hashlimit-mode srcip,dstip --hashlimit-srcmask 16 \
-        --hashlimit-dstmask 16 --hashlimit-name loglimit-0 \
-        -j NFLOG --nflog-group 1 --nflog-range 128
-
-
-
-# Start sdwconfig container managing bridging config
-docker run -t --restart=always --privileged --net=host \
-	-v /home/upa/work/nante-wan/sdwconfig.conf:/etc/sdwconfig.conf \
-	-v /dev/log:/dev/log \
-	upaa/sdwconfig  &
-
-
-# Start nante-wan container managing routing
-docker run -t --restart=always --privileged --net=host \
-	-v /home/upa/nante-wan.conf:/etc/nante-wan.conf \
-	upaa/nante-wan &
-```

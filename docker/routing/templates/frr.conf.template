@@ -1,5 +1,7 @@
 frr defaults traditional
 !
+nhrp nflog-group 1
+!
 service integrated-vtysh-config
 !
 log file /var/log/frr/frr.log
@@ -9,6 +11,7 @@ interface gre1
  ip address {{ dmvpn_addr }}/32
  ip nhrp network-id 1
  ip nhrp nhs {{ nhs_addr }} nbma {{ nhs_nbma_addr }}
+ ip nhrp registration no-unique
  ip nhrp shortcut
  tunnel protection vici profile dmvpn
  tunnel source {{ wan_interface }}
