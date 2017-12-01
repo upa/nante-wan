@@ -7,6 +7,5 @@ RUN apt-get update && apt-get install -y \
 
 # setup ebconfig
 ADD ebconfig.py ${workdir}/ebconfig.py
-ADD getip.py ${workdir}/getip.py
 
-CMD bash -c "/root/ebconfig.py -b `/root/getip.py gre1` -p 8080 -u http://10.0.0.0/ebconfig/`/root/getip.py gre1`.json"
+CMD bash -c "/root/ebconfig.py /etc/nante-wan.conf"

@@ -1,0 +1,39 @@
+
+[
+{
+	"vlan" : 10, 
+	"ip-filter" : {
+		"default" : "permit",
+		"rules" : [
+			{
+				"proto" : "tcp",
+				"src-ip" : "0.0.0.0/0",	"src-port" : "any",
+				"dst-ip" : "10.0.0.1/32", "dst-port" : "any",
+				"action" : "deny"
+	        	},
+			{
+				"proto" : "tcp",
+				"src-ip" : "1.1.1.1",	"src-port" : "any",
+				"dst-ip" : "2.2.2.2", "dst-port" : "any",
+				"action" : "deny"
+	        	},
+			{
+				"proto" : "udp",
+				"src-ip" : "0.0.0.0/30", "src-port" : "any",
+				"dst-ip" : "192.168.0.0/16", "dst-port" : 80,
+				"action" : "permit"
+			}
+		]
+	},
+	"mac-filter" : {
+		"default" : "deny",
+		"rules" : [
+			{ "mac" : "0a:00:27:00:00:01", "action" : "permit" },
+			{ "mac" : "0a:00:27:00:00:02", "action" : "permit" },
+			{ "mac" : "0a:00:27:00:00:03", "action" : "permit" }
+		]
+	}
+},
+{
+}
+]

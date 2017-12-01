@@ -1,37 +1,16 @@
 #!/usr/bin/env python3
 
-"""
-
-Controling Firewall powered by ebtables.
-
-JSON Format.
-[
-  { "vlan" : vid, "blockaddrs" : [ X.X.X.X, Y.Y.Y.Y ]},
-  { "vlan" : vid, "blockaddrs" : [ X.X.X.X, Y.Y.Y.Y ]},
-]
-
-1. ebconfig regularly tries to get json file from specified URL,
-   and update filter rules.
-2. if ebconfig kicked through the RESTGW (/update_from_url),
-   ebconfig starts to get the json file.
-
-"""
-
-
 import os
 import sys
 import json
-import time
+import asyncio
 import threading
 import subprocess
 import configparser
 
-from optparse import OptionParser
+
 from logging import getLogger, DEBUG, StreamHandler, Formatter
 from logging.handlers import SysLogHandler
-
-from flask import Flask
-app = Flask(__name__)
 
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
@@ -48,146 +27,259 @@ logger.propagate = False
 
 ebcmd = "/sbin/ebtables"
 
-# OptionParser variable
-options = None
 
 
+from flask import Flask
+app = Flask(__name__)
 
-def ebconfig_update(json_data) :
-    
-    logger.info("Start to config ebtable: %s" % json_data)
 
-    cmds = [[ ebcmd, "-F" ]]
-    
-    for net in json_data :
-        vid = net["vlan"]
-        for blockaddr in net["blockaddrs"] :
-            cmds.append([
-                ebcmd, "-A", "FORWARD", "-i", "vxlan%d" % vid,
-                "-p", "IPv4", "--ip-src", blockaddr, "-j", "DROP"
-            ])
+# EbConfig instance
 
+def run_cmds(cmds):
     for cmd in cmds :
-        subprocess.check_output(cmd)
+        logger.debug(" ".join(list(map(str, cmd))))
+        subprocess.check_output(list(map(str, cmd)))
 
 
-def get_ebconfig_json() :
+class EbConfig() :
 
-    try :
-        res = requests.get(options.url, timeout = options.timeout)
-        if res.status_code != 200 :
-            logger.error("GET JSON failed from %s, status %d" %
-                         (options.url, res.status_code))
-            return False
-        json_data = res.json()
+    def __init__ (self, configfile) :
 
-    except requests.exceptions.RequestException as e :
-        logger.error("GET JSON failed from %s, %s", options.url, e)
-        return False
+        config = configparser.ConfigParser()
+        config.read(configfile)
 
-    except Exception as e :
-        logger.error("GET JSON failed from %s, %s", options.url, e)
-        return False
+        self.dmvpn_addr = config.get("general", "dmvpn_addr")
 
-    return json_data
+        self.timeout = config.getint("config_fetch", "timeout")
+        self.interval = config.getint("config_fetch", "interval")
+        self.failed_interval = config.getint("config_fetch", "failed_interval")
+
+        self.url = "%s/%s.json" % (config.get("ebconfig", "json_url_prefix"),
+                                   config.get("general", "dmvpn_addr"))
+        self.bind_port = config.getint("ebconfig", "bind_port")
+        if config.has_option("ebconfig", "bind_addr") :
+            self.bind_addr = config.get("ebconfig", "bind_addr")
+        else :
+            self.bind_addr = config.get("general", "dmvpn_addr")
+
+        if config.has_option("ebconfig", "json_config") :
+            self.json_config = config.get("ebconfig", "json_config")
+        else :
+            self.json_config = None
 
 
-def ebconfig_oneshot(nowait = False) :
+    def fetch(self) :
+        # fetch the config json from confg server
 
-    while True:
+        if self.json_config :
+            with open(self.json_config, "r") as f :
+                return json.load(f)
+
         try :
-            json_data = get_ebconfig_json()
-            if not json_data :
-                if nowait: break
-                time.sleep(options.error_interval)
-            else :
-                ebconfig_update(json_data)
-                break
+            res = requests.get(self.url, timeout = self.timeout)
+            if res.status_code != 200 :
+                logger.error("Failed to GET '%s', status_code %d" %
+                             (self.url, res.status_code))
+                return False
+        except requests.exceptions.RequestException as e :
+            logger.error("Failed to GET '%s': %s" % (self.url, e))
+            return False
 
         except Exception as e :
-            logger.error("ebconfig_loop failed, sleep %d sec : %s:%s" %
-                          (options.error_interval, e.__class__, e))
-            if nowait: break
-            time.sleep(options.error_interval)
+            logger.error("Failed to GET '%s': %s" % (self.url, e))
+            return False
+
+        try :
+            return res.json()
+        except Exception as e :
+            logger.error("Invalid JSON from '%s': %s" % (self.url, e))
+            return False
 
 
-def ebconfig_loop() :
+            
+    def execute(self) :
 
-    while True:
-        ebconfig_oneshot()
-        logger.info("ebtable_onshot done. sleep %s sec" % options.interval)
-        time.sleep(options.interval)
+        jsonconfig = self.fetch()
+        if not jsonconfig :
+            return False
+
+        self.flush_ebtables()
+        for netconfig in jsonconfig :
+            self.insert_ip_filter(netconfig)
+            self.insert_mac_filter(netconfig)
+
+        return True
+        
 
 
-@app.route("/update_from_url", methods = [ "GET", "POST" ])
+    def flush_ebtables(self) :
+
+        cmds = [
+            [ ebcmd, "-X" ],
+            [ ebcmd, "-F" ]
+        ]
+
+        run_cmds(cmds)
+
+
+    def insert_ip_filter(self, netconfig) :
+
+        if (not "vlan" in netconfig or
+            not "ip-filter" in netconfig or
+            not "rules" in netconfig["ip-filter"]) :
+            return
+
+        vlan = netconfig["vlan"]
+        default = netconfig["ip-filter"]["default"]
+        rules = netconfig["ip-filter"]["rules"]
+        interface = "vxlan%d" % vlan
+
+        if default == "permit" : default = "ACCEPT"
+        elif default == "deny" : default = "DROP"
+        else :
+            raise RuntimeError("invalid default action '%s'" % default)
+
+        cmds = []
+
+        for rule in rules :
+
+            proto = rule["proto"]
+            src_ip = rule["src-ip"] if "src-ip" in rule else "0.0.0.0/0"
+            dst_ip = rule["dst-ip"] if "dst-ip" in rule else "0.0.0.0/0"
+            src_port = rule["src-port"] if "src-port" in rule else "any"
+            dst_port = rule["dst-port"] if "dst-port" in rule else "any"
+
+            action = rule["action"] if "action" in rule else "deny"
+            if action == "permit" : action = "ACCEPT"
+            elif action == "deny" : action = "DROP"
+            else :
+                raise RuntimeError("invalid action '%s'" % action)
+
+
+            cmd = [ ebcmd, "-A", "FORWARD", "-o", interface,
+                    "-p", "IPv4", "--ip-src", src_ip, "--ip-dst", dst_ip,
+                    "--ip-proto", proto
+            ]
+
+            if src_port != "any" :
+                cmd += [ "--ip-sport", src_port ]
+            if dst_port != "any" :
+                cmd += [ "--ip-dport", dst_port ]
+
+            cmd += [ "-j", action ]
+
+            cmds.append(cmd)
+            
+        cmds.append([
+            ebcmd, "-A", "FORWARD", "-o", interface,
+            "-p", "IPv4", "-j", default
+        ])
+        
+        run_cmds(cmds)
+
+
+    def insert_mac_filter(self, netconfig) :
+
+        if (not "vlan" in netconfig or
+            not "mac-filter" in netconfig or
+            not "rules" in netconfig["mac-filter"]) :
+            return
+
+        vlan = netconfig["vlan"]
+        default = netconfig["mac-filter"]["default"]
+        rules = netconfig["mac-filter"]["rules"]
+        interface = "vxlan%d" % vlan
+
+        if default == "permit" : default = "ACCEPT"
+        elif default == "deny" : default = "DROP"
+        else :
+            raise RuntimeError("invalid default action '%s'" % default)
+
+        cmds = []
+
+        for rule in rules :
+            
+            mac = rule["mac"]
+            action = rule["action"] if "action" in rule else "deny"
+            if action == "permit" : action = "ACCEPT"
+            elif action == "deny" : action = "DROP"
+            else :
+                raise RuntimeError("invalid action '%s'" % action)
+            
+            cmd = [ ebcmd, "-A", "FORWARD", "-o", interface,
+                    "--src", mac, "-j", action
+            ]
+
+            cmds.append(cmd)
+
+        cmds.append([
+            ebcmd, "-A", "FORWARD", "-o", interface, "-j", default
+        ])
+
+        run_cmds(cmds)
+
+
+    
+    def fetch_loop(self, loop, once) :
+
+        try :
+            ret = self.execute()
+            if ret :
+                if once :
+                    loop.stop()
+                    return True
+                loop.call_later(self.interval, self.fetch_loop, loop, once)
+            else :
+                loop.call_later(self.failed_interval,
+                                self.fetch_loop, loop, once)
+
+        except KeyboardInterrupt:
+            logger.info("Keyboard interrupt. stop ebconfig loop.")
+            loop.stop()
+
+        except Exception as e:
+            logger.error("ebconfig error occurd:%s: %s" %
+                         (e.__class__.__name__, e))
+            loop.call_later(self.failed_interval, self.fetch_loop, loop, once)
+
+
+    def start_loop(self) :
+        loop = asyncio.get_event_loop()
+        loop.call_soon(self.fetch_loop, loop, False)
+        loop.run_forever()
+        loop.close()
+
+
+    def execute_once(self) :
+        loop = asyncio.new_event_loop()
+        loop.call_soon(self.fetch_loop, loop, True)
+        loop.run_forever()
+        loop.close()
+
+
+@app.route("/update-kick", methods = [ "GET", "POST" ])
 def ebconfig_rest_update_from_url() :
-    logger.info("Update trigger kicked. start to obtain JSON from %s" %
-                options.url)
-    ebconfig_oneshot(nowait = True)
-    return "Done", 200
+    logger.info("Update trigger. start to obtain JSON")
+
+    global ebconfig
+    ebconfig.execute_once()
+    return "Start Update", 200
 
 
-def ebconfig_rest_start() :
-    logger.info("Start REST Gateway on %s:%d" % (options.bind_addr,
-                                                 options.bind_port))
+def ebconfig_rest_start(bind_addr, bind_port) :
+    logger.info("Start REST Gateway on %s:%d" % (bind_addr,
+                                                 bind_port))
     th = threading.Thread(name = "rest_gw", target = app.run,
                           kwargs = {
                               "threaded" : True,
-                              "host" : options.bind_addr,
-                              "port" : options.bind_port,
+                              "host" : bind_addr,
+                              "port" : bind_port,
                           })
     th.start()
 
 
 
 if __name__ == "__main__" :
-
-    desc = "usage: %prog [options]"
-    parser = OptionParser(desc)
-
-    parser.add_option(
-        "-u", "--url", type = "string", default = None, dest = "url",
-        help = "JSON file URL"
-    )
-    parser.add_option(
-        "-f", "--file", type = "string", default = None, dest = "jsonfile",
-        help = "JFON file path (exclusive with -u URL)"
-    )
-    parser.add_option(
-        "-t", "--timeout", type = "int", default = 10,
-        dest = "timeout", help = "timeout for retrieving JSON file"
-    )
-    parser.add_option(
-        "-e", "--error-interval", type = "int", default = 10,
-        dest = "error_interval", help = "interval when error occur"
-    )
-    parser.add_option(
-        "-i", "--interval", type = "int", default = 3600,
-        dest = "interval", help = "regular JSON retrieve interval"
-    )
-    parser.add_option(
-        "-b", "--bind-addr", type = "string", default = "127.0.0.1",
-        dest = "bind_addr", help = "bind address of REST gateway"
-    )
-    parser.add_option(
-        "-p", "--bind-port", type = "int", default = 80,
-        dest = "bind_port", help = "bind port of REST gateway"
-    )
-
-    (options, args) = parser.parse_args()
-
-    if options.jsonfile :
-        with open(options.jsonfile, "r") as f :
-            json_data = json.load(f)
-            ebconfig_update(json_data)
-        sys.exit(0)
-        
-    if not options.url :
-        logger.error("-u (JSON file url) or -f (JSON file path) is required")
-        sys.exit(1)
-
-    # start REST gateway
-    ebconfig_rest_start()
-
-    # etnering loop
-    ebconfig_loop()
+    ebconfig = EbConfig(sys.argv[1])
+    ebconfig_rest_start(ebconfig.bind_addr, ebconfig.bind_port)
+    ebconfig.start_loop()
