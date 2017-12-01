@@ -5,6 +5,8 @@ import sys
 import subprocess
 import configparser
 
+from optparse import OptionParser
+
 from logging import getLogger, DEBUG, StreamHandler, Formatter
 from logging.handlers import SysLogHandler
 logger = getLogger(__name__)
@@ -109,23 +111,49 @@ def setup_nflog(config) :
     run_cmds(cmds)
 
 
-def run_containers(config, configpath) :
+def run_containers(option, config, configpath) :
 
     logger.info("Start Nante-WAN Docker Containers")
 
-    # check nante-wan containers already running
-    cmds = [
-        [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
-          "-v", "%s:/etc/nante-wan.conf" % configpath,
-          "-v", "/dev/log:/dev/log",
-          "upaa/nante-wan-routing"
-        ],
-        [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
-          "-v", "%s:/etc/nante-wan.conf" % configpath,
-          "-v", "/dev/log:/dev/log",
-          "upaa/nante-wan-portconfig"
-        ],
-    ]
+    cmds = []
+
+    if option.route_server :
+        # run route server container
+        cmds += [
+            [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
+              "-v", "%s:/etc/nante-wan.conf" % configpath,
+              "-v", "/dev/log:/dev/log",
+              "upaa/nante-wan-route-server"
+            ]
+        ]
+
+
+    else :
+        # run as edge device
+        cmds += [
+            [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
+              "-v", "%s:/etc/nante-wan.conf" % configpath,
+              "-v", "/dev/log:/dev/log",
+              "upaa/nante-wan-routing"
+            ],
+            [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
+              "-v", "%s:/etc/nante-wan.conf" % configpath,
+              "-v", "/dev/log:/dev/log",
+              "upaa/nante-wan-portconfig"
+            ],
+        ]
+
+    if option.config_server :
+        # run config server container
+        cmds += [
+            [ docker, "run", "-dt", "--rm", "--net=host",
+              "-v", "%s:/etc/nante-wan.conf" % configpath,
+              "-v", "/dev/log:/dev/log",
+              "-v", "%s:/var/www/html" % os.path.abspath(option.config_dir),
+              "upaa/nante-wan-config-server"
+            ]
+        ]
+
     
     dockerps = "docker ps | grep upaa/nante-wan"
     for line in subprocess.getoutput([dockerps]).split("\n") :
@@ -140,14 +168,40 @@ def run_containers(config, configpath) :
 
 if __name__ == "__main__"  :
 
-    if len(sys.argv) != 2 :
+    desc = "usage: %prog [options] nante-wan.conf"
+    parser = OptionParser(desc)
+
+    parser.add_option(
+        "--route-server", action = "store_true", default = False,
+        dest = "route_server",
+        help = "Run as a route server (BGP RR and NHRP NHS)"
+    )
+    parser.add_option(
+        "--config-server", action = "store_true", default = False,
+        dest = "config_server",
+        help = "Run as a config server (HTTP server)"
+    )
+    parser.add_option(
+        "--config-dir", type = "string", default = False,
+        dest = "config_dir",
+        help = "coonfig directory for config server (DocumentRoot)"
+    )
+
+
+    (option, args) = parser.parse_args()
+
+    if not args :
         print("Usage: %s [Nante-WAN Config]" % sys.argv[0])
         sys.exit(1)
 
+    if option.config_server and not option.config_dir :
+        print("--config-dir is required to run as config-server")
+        sys.exit(1)
+
     config = configparser.ConfigParser()
-    config.read(sys.argv[1])
+    config.read(args[0])
 
     setup_gre(config)
     setup_bridge(config)
     setup_nflog(config)
-    run_containers(config, os.path.abspath(sys.argv[1]))
+    run_containers(option, config, os.path.abspath(args[0]))

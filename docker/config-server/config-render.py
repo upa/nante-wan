@@ -43,7 +43,7 @@ if __name__ == '__main__' :
     if options.stdout :
         of_nginx = sys.stdout
     else :
-        of_nginx = open("/etc/nginx/sites-enabled/default")
+        of_nginx = open("/etc/nginx/sites-enabled/default", "w")
 
         
     config_render_nginx(config, of_nginx)
