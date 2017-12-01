@@ -1,0 +1,44 @@
+frr defaults traditional
+!
+nhrp nflog-group 1
+!
+service integrated-vtysh-config
+!
+log file /var/log/frr/frr.log
+!
+interface gre1
+ description dmvpn
+ ip address {{ dmvpn_addr }}/32
+ ip nhrp network-id 1
+ ip nhrp redirect
+ tunnel protection vici profile dmvpn
+ tunnel source {{ wan_interface }}
+!
+router bgp {{ as_number }}
+ bgp router-id {{ dmvpn_addr }}
+ no bgp default ipv4-unicast
+ bgp cluster-id {{ dmvpn_addr }}
+ neighbor evpn-peer peer-group
+ neighbor evpn-peer remote-as {{ as_number }}
+ neighbor evpn-peer update-source {{ dmvpn_interface  }}
+ neighbor evpn-peer capability extended-nexthop
+ bgp listen range {{ bgp_range }} peer-group evpn-peer
+ !
+ address-family ipv4 unicast
+  redistribute nhrp
+  neighbor evpn-peer activate
+  neighbor evpn-peer route-reflector-client
+ exit-address-family
+ !
+ address-family l2vpn evpn
+  neighbor evpn-peer activate
+  neighbor evpn-peer route-reflector-client
+  advertise-all-vni
+ exit-address-family
+ vnc defaults
+  response-lifetime 3600
+  exit-vnc
+!
+line vty
+!
+end

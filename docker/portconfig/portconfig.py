@@ -12,14 +12,12 @@ import threading
 import subprocess
 import configparser
 
-from optparse import OptionParser
-from logging import getLogger, DEBUG, StreamHandler, Formatter
-from logging.handlers import SysLogHandler
-
 import requests
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
+from logging import getLogger, DEBUG, StreamHandler, Formatter
+from logging.handlers import SysLogHandler
 logger = getLogger(__name__)
 logger.setLevel(DEBUG)
 stream = StreamHandler()
