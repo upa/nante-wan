@@ -97,7 +97,7 @@ class Port() :
         for vlan in self.vlans :
             cmd = [ brcmd, "vlan", "add", "vid", vlan, "dev", self.name ]
             if not self.tagged :
-                cmd += [ "egress", "untagged", "pvid" ]
+                cmd += [ "untagged", "pvid" ]
             cmds.append(cmd)
 
         for cmd in cmds :

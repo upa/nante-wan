@@ -89,7 +89,7 @@ def setup_nflog(config) :
 
     cmds = [
         [
-            "iptables", "-A", "FORWARD",
+            iptables, "-A", "FORWARD",
             "-i", dmvpn_interface, "-o", dmvpn_interface,
             "-m", "hashlimit",
             "--hashlimit-upto", "4/minute",
@@ -98,6 +98,9 @@ def setup_nflog(config) :
             "--hashlimit-srcmask", 16,
             "--hashlimit-name", "loglimit-0",
             "-j", "NFLOG", "--nflog-group", 1, "--nflog-size", 128
+        ],
+        [
+            iptables, "-P", "FORWARD", "-j", "ACCEPT"
         ]
     ]
 
