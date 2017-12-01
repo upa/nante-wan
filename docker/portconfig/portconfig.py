@@ -44,23 +44,36 @@ app = Flask(__name__)
 
 class Port() :
 
-    def __init__(self, name, master = None, vlan = 0) :
+    def __init__(self, name, master = None, vlans = None, tagged = False) :
         self.name = name
         self.master = master
-        self.vlan = vlan
+        self.tagged = tagged
+        if vlans :
+            self.vlans = vlans
+        else :
+            self.vlans = []
+
+        if tagged is not True and tagged is not False :
+            raise ValueError("invalid tagged value '%s'. true or false."
+                             % tagged)
+
 
     def __str__(self) :
-        return "<Port %s: Master=%s VLAN=%d>" % \
-            (self.name, self.master, self.vlan)
+        return "<Port %s: Master=%s Tagged=%s VLAN=%s>" % \
+            (self.name, self.master, self.tagged, self.vlans)
 
-    def set_vlan(self, vlan) :
-        self.vlan = vlan
+    def add_vlan(self, vlan) :
+        self.vlans.append(vlan)
+
+    def set_tagged(self, tagged) :
+        self.tagged = tagged
 
     def diff_check(self, port) :
         # check parameters of 'self' and 'port' are same?
         if (self.name == port.name and
             self.master == port.master and
-            self.vlan == port.vlan) :
+            set(self.vlans) == set(port.vlans) and
+            self.tagged == port.tagged) :
             return False
         else:
             return True
@@ -77,12 +90,17 @@ class Port() :
     def setup(self) :
 
         # ok, setup vlans
+
         cmds = [
             [ipcmd, "link", "set", "dev", self.name, "master", self.master],
-            [brcmd, "vlan", "add", "vid", self.vlan, "dev", self.name,
-             "untagged", "pvid"],
             [ipcmd, "link", "set", "up", "dev", self.name],
         ]
+
+        for vlan in self.vlans :
+            cmd = [ brcmd, "vlan", "add", "vid", vlan, "dev", self.name ]
+            if not self.tagged :
+                cmd += [ "egress", "untagged", "pvid" ]
+            cmds.append(cmd)
 
         for cmd in cmds :
             subprocess.check_output(list(map(str, cmd)))
@@ -117,9 +135,10 @@ class Bridge() :
     def update_vlan_set(self) :
         self.vlans = set()
         for port in self.ports.values() :
-            self.vlans.add(port.vlan)
+            for vlan in port.vlans :
+                self.vlans.add(vlan)
 
-    def vlan_set_validate(self) :
+    def validate_vlan_set(self) :
         # check this vlan has vxlan interface
         rem = []
         for vlan in self.vlans :
@@ -176,9 +195,9 @@ class Bridge() :
         { 
           'name' : 'bridge_name',
           'ports' : [
-            { 'name' : 'port1_name', 'vlan' : VLANID },
-            { 'name' : 'port1_name', 'vlan' : VLANID },
-            { 'name' : 'port1_name', 'vlan' : VLANID },
+            { 'name' : 'port1_name', 'vlan' : VLANID, 'tagged' : true },
+            { 'name' : 'port1_name', 'vlan' : VLANID, 'tagged' : false },
+            { 'name' : 'port1_name', 'vlan' : VLANID  'tagged' : false },
           ]
         }
         
@@ -194,13 +213,15 @@ class Bridge() :
 
                 self.add_port(Port(jport["name"],
                                    master = self.name,
-                                   vlan = jport["vlan"]))
+                                   vlans = jport["vlans"],
+                                   tagged = jport["tagged"]))
 
             # update vlan set of this bridge
             self.update_vlan_set()
 
         except Exception as e:
-            logger.error("Invalid JSON file : %s" % e)
+            logger.error("JSON load failed :%s: %s" %
+                         (e.__class__.__name__, e))
             return False
 
         return True
@@ -218,7 +239,6 @@ class Bridge() :
                     port = Port(s[1], master = self.name)
                     self.add_port(port)
 
-
         # check vlan id of associated ports
         brout = subprocess.check_output([brcmd, "-json", "vlan", "show"])
         brout = brout.decode("utf-8")
@@ -226,15 +246,22 @@ class Bridge() :
         for port in self.list_ports() :
             if not port.name in vlanshow : continue
 
+            port.set_tagged(False)
+
             vlans = vlanshow[port.name]
             for vlan in vlans :
-                if ("PVID" in vlan["flags"] and
-                    "Egress Untagged" in vlan["flags"]) :
-                    port.set_vlan(vlan["vlan"])
+                if vlan["vlan"] == 1 : continue
+                port.add_vlan(vlan["vlan"])
+
+                if (not "flags" in vlan or
+                    not "Egress Untagged" in vlan["flags"]) :
+                    # tagged vlan object does not have flag Untagged
+                    port.set_tagged(True)
+
 
         # update vlan set of this bridge
         self.update_vlan_set()
-        self.vlan_set_validate()
+        self.validate_vlan_set()
 
 
 class PortConfig() :
@@ -337,7 +364,11 @@ class PortConfig() :
                 new_port.setup()
 
             elif new_port.diff_check(bridge_now.find_port(new_port.name)) :
+                now_port = bridge_now.find_port(new_port.name)
                 logger.debug("- setup %s" % new_port)
+                logger.debug("-    current: %s" % now_port)
+
+
                 new_port.setup()        
         
         return True
@@ -345,8 +376,8 @@ class PortConfig() :
 
     def fetch_loop(self, loop, once) :
         
-        ret = self.execute()
         try:
+            ret = self.execute()
             if ret :
                 if once :
                     loop.stop()
@@ -360,7 +391,8 @@ class PortConfig() :
             loop.stop()
             
         except Exception as e:
-            logger.erro("portconfig error occurd: %s" % e)
+            logger.error("portconfig error occurd:%s: %s" %
+                         (e.__class__.__name__, e ))
             loop.call_later(self.failed_interval, self.fetch_loop, loop, once)
         
 

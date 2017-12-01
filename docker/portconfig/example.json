@@ -1,6 +1,15 @@
 {
 	"name" : "bridge",
 	"ports" : [
-		{ "name" : "vetha", "vlan" : 10 }
+		{
+		       	"name" : "vetha", 
+			"tagged" : false,
+			"vlans" :  [ 10, 11 ]
+		},
+		{
+		       	"name" : "vethc",
+			"tagged" : false,
+			"vlans" :  [ 10 ]
+		}
 	]
 }
