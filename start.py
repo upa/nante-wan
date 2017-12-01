@@ -100,7 +100,7 @@ def setup_nflog(config) :
             "-j", "NFLOG", "--nflog-group", 1, "--nflog-size", 128
         ],
         [
-            iptables, "-P", "FORWARD", "-j", "ACCEPT"
+            iptables, "-P", "FORWARD", "ACCEPT"
         ]
     ]
 
