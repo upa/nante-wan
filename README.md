@@ -161,7 +161,7 @@ bind_port       = 8081
 
 The most important parameter is **dmvpn_addr**. **dmvpn_addr**
 parameter is different from other nodes. It is 10.0.0.1 on CE1, and
-10.0.0.2 on the route/config server. **wan_interface** should be
+10.0.0.10 on the route/config server. **wan_interface** should be
 changed for a proper interface name according as machine
 environment. If it is enp1s0 in your environment, *wan_interface*
 should be enp1s0.
