@@ -48,16 +48,16 @@ nodes, Route Server, and Config Server.
   on the DMVPN overlay (NHRP).
 
 - **Config Server**: Config Server is an HTTP server. CE nodes
-  regurarly fetch bridge configuration files from the config server
-  across the DMVPN overlay. Moreover, when a config file for a CE node
-  is changed, the config server notifies the CE.
+  regurarly fetch bridge interface configurations from the config
+  server across the DMVPN overlay. Moreover, when a bridge config file
+  for a CE node is changed, the config server notifies the CE.
 
 
 CE nodes constructs VXLAN over DMVPN overlay using Route Server as
-IPsec anchor, Next Hop Resolation on DMVPN, and RR for EVPN. Bridging
-configuration on CE nodes are centralized in Config Server. Under this
-control, CE nodes deliver Ethernet frames from edge networks to proper
-CE nodes across the Internet.
+IPsec anchor, Next Hop Resolation on DMVPN, and RR for EVPN. Bridge
+interface configurations on CE nodes are centralized in Config
+Server. Under this control, CE nodes deliver Ethernet frames from edge
+networks to proper CE nodes across the Internet.
 
 
 
@@ -176,9 +176,12 @@ json_url_prefix = http://10.0.0.10/ebconfig
 bind_port       = 8081
 ```
 
-The most important parameter is **dmvpn_addr**. **dmvpn_addr**
-parameter is different from other nodes. It is 10.0.0.1 on CE1, and
-10.0.0.10 on the route/config server. **wan_interface** should be
+The most important parameter is **dmvpn_addr**. dmvpn_addr is an IP
+address assigned to a gre1 interface of a node, and it is used for
+messaging, iBGP (EVPN), and VXLAN encapsulation.  Namely, dmvpn_addr
+is node's IP address on a DMVPN overlay. Therefore, dmvpn_addr must be
+different from other nodes. In this example, it is 10.0.0.1 on CE1,
+and 10.0.0.10 on the route/config server. **wan_interface** should be
 changed for a proper interface name according as machine
 environment. If an interface connecting to underlay (public networks)
 is enp1s0 in your environment, *wan_interface* should be enp1s0.
@@ -343,8 +346,8 @@ you might have guessed.
 }
 ```
 
-After place config files in *html/portconfig* directory, bridge
-interfaces on all CE nodes are configured automatically.
+After place bridge configuration files in *html/portconfig* directory,
+bridge interfaces on all CE nodes are configured automatically.
 
 At config server,
 ```shell-session
