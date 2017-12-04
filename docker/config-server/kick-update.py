@@ -60,12 +60,13 @@ class NotifyHandler(pyinotify.ProcessEvent):
 
         for x in range (5) :
             try :
-                res = requests.put(self. url, timeout = 5)
+                res = requests.get(url, timeout = 5)
                 if res.status_code == 200 :
                     logger.error("kick %s success" % url)
                     break
                 else :
-                    logger.error("Failed to kick %s, %d" % (url, res.status_code))
+                    logger.error("Failed to kick %s, %d" %
+                                 (url, res.status_code))
 
             except Exception as e :
                 logger.error("Failed to kick %s :%s:%s" %

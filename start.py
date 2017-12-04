@@ -187,7 +187,12 @@ if __name__ == "__main__"  :
     parser.add_option(
         "--config-dir", type = "string", default = False,
         dest = "config_dir",
-        help = "coonfig directory for config server (DocumentRoot)"
+        help = "config directory for config server (DocumentRoot)"
+    )
+    parser.add_option(
+        "--container-only", action = "store_true", default = False,
+        dest = "container_only",
+        help = "(stop and) start containers (not config network stack)"
     )
 
 
@@ -204,7 +209,9 @@ if __name__ == "__main__"  :
     config = configparser.ConfigParser()
     config.read(args[0])
 
-    setup_gre(config)
-    setup_bridge(config)
-    setup_nflog(config)
+    if not option.container_only :
+        setup_gre(config)
+        setup_bridge(config)
+        setup_nflog(config)
+
     run_containers(option, config, os.path.abspath(args[0]))
