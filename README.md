@@ -99,7 +99,7 @@ ip netns exec $ns ip addr add dev vethb $edge_addr
 First of all, clone Nante-WAN repository and edit
 [nante-wan.conf](https://github.com/upa/nante-wan/blob/master/nante-wan.conf)
 
-```bash
+```shell-session
 # at all nodes,
 ce1:$ git clone https://github.com/upa/nante-wan.git
 ce1:$ cd nante-wan
@@ -167,13 +167,13 @@ overlay.
 ### 2. Pull containers
 
 At CE nodes,
-```bash
+```shell-session
 ce1:$ docker pull upaa/nante-wan-routing
 ce1:$ docker pull upaa/nante-wan-portconfig
 ```
 
 At the route and config server,
-```bash
+```shell-session
 server:$ docker pull upaa/nante-wan-route-server
 server:$ docker pull upaa/nante-wan-config-serger
 ```
@@ -208,14 +208,14 @@ nante-wan/start.py does all things to start Nante-WAN at nodes.
 
 
 At Config/Route server node,
-```bash
+```shell-session
 # make a directory to store config files.
 server:$ mkdir html
 server:$ sudo ./start.py --route-server --config-server --config-dir html nante-wan.conf
 ```
 
 At CE nodes,
-```bash
+```
 ce1:$ sudo ./start.py nante-wan.conf
 ```
 
@@ -224,7 +224,7 @@ ce1:$ sudo ./start.py nante-wan.conf
 
 start.py shows executing commands like below.
 
-```bash
+```shell-session
 ce2:$ sudo ./start.py nante-wan.conf
 # Setup GRE Interface
 #   wan_interface   : eth0
@@ -249,7 +249,7 @@ modprobe af_key
 
 And, you can verify EVPN and IPsec states like following.
 
-```bash
+```shell-session
 ce2:$ docker ps
 CONTAINER ID        IMAGE                       COMMAND                  CREATED             STATUS              PORTS               NAMES
 b6b4fdd4e57e        upaa/nante-wan-portconfig   "/bin/sh -c 'bash ..."   2 seconds ago       Up 1 second                             hardcore_bell
@@ -320,7 +320,7 @@ After place config files in *html/portconfig* directory, bridge
 interfaces on all CE nodes are configured.
 
 At config server,
-```bash
+```shell-session
 server:$ cat << EOF > example.json
 heredoc% { "name" : "bridge", "ports" : [ { "name": "vetha", "tagged": false, "vlans": [ 99 ] } ] }
 heredoc% EOF
@@ -333,7 +333,8 @@ server:$ cp example.json html/port/10.0.0.3.json
 At CE nodes, verify vlan 99 is created and vetha is configured as
 tagged vlan 99.
 
-```bash $ bridge vlan show port vlan ids docker0 1
+```shell-session
+ce1:$ bridge vlan show port vlan ids docker0 1
 PVID Egress Untagged
 
 vetha	 1 Egress Untagged
@@ -350,7 +351,7 @@ vxlan99	 1 Egress Untagged
 Then, you can ping from any edge network namespaces from others across
 VXLAN over DMVPN overlay.
 
-```bash
+```shell-session
 sudo ip netns exec edge-network bash
 ce1:# ifconfig
 lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
