@@ -212,9 +212,9 @@ server:$ docker pull upaa/nante-wan-config-serger
 
 All containers contains config rendering scripts. These scripts
 generate specific configuration files, for example, frr.conf and IPsec
-configuration, from nante-wan.conf. Therefore, you can only run
-containers with nante-wan.conf to start Nante-WAN without editting
-specific configurations.
+configuration, from nante-wan.conf. Therefore, you can run containers
+with nante-wan.conf to start Nante-WAN without editting such specific
+configurations.
 
 
 
