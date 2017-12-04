@@ -4,8 +4,11 @@ Nante-WAN: なんちゃってSD-WAN
 
 Nante-WAN is yet another SD-WAN solution by open source software:
 Linux and [FRRouting](https://frrouting.org/). Nante-WAN provides
-NAT-traversal, Multipoint, Encrypted Layer-2 overlay networks by DMVPN
-(Dynamic Multipoint VPN), VXLAN and EVPN.
+NAT-traversal, Multipoint, Encrypted Layer-2 overlay networks using
+[DMVPN (Dynamic Multipoint
+VPN)](https://www.cisco.com/c/en/us/products/security/dynamic-multipoint-vpn-dmvpn/index.html),
+[VXLAN](https://datatracker.ietf.org/doc/rfc7348/) and
+[EVPN](https://datatracker.ietf.org/doc/draft-ietf-bess-dci-evpn-overlay/).
 
 
 The data plane of Nante-WAN is VXLAN over DMVPN/IPsec overlay network.
