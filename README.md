@@ -5,8 +5,8 @@ Nante-WAN: なんちゃってSD-WAN
 Nante-WAN is yet another SD-WAN solution by open source software:
 Linux and [FRRouting](https://frrouting.org/). Nante-WAN provides
 NAT-traversal, Multipoint, Encrypted Layer-2 overlay networks by DMVPN
-(Dynamic Multipoint VPN), VXLAN (Virtual eXtensible LAN) and EVPN
-(Ethernet VPN).
+(Dynamic Multipoint VPN), VXLAN and EVPN.
+
 
 The data plane of Nante-WAN is VXLAN over DMVPN/IPsec overlay network.
 DMVPN provides multipoint layer-3 overlay, and IPsec provides packet
@@ -19,7 +19,7 @@ Nexthop Resolution Protocol (NHRP) for DMVPN.
 
 
 Nante-WAN components are packaged as docker containers, and they run
-on Ubuntu 17.10. So, you can (easily?) test and deplyo this yet
+on Ubuntu 17.10. So, you can (easily?) test and deploy this yet
 another SD-WAN in your both physical and virtual machine environments.
 
 
