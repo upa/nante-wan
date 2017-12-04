@@ -60,7 +60,7 @@ IP address. Those /32 IP addresses on the DMVPN overlay are used for
 messaging between CEs, route and config servers.
 
 In the example environment, all CEs have veth interface pairs and
-network namespaces as edge netweorks (172.16.0.0/24, depicted on
+network namespaces as edge netweorks (172.16.0.0/24, depicted as
 orange boxes in Fig.2). After the Nante-WAN overlay is Up, all
 namespaces will be connected as a single layer-2 segment across the
 underlay network. Then you can ping from any namespaces to others.
@@ -68,24 +68,42 @@ underlay network. Then you can ping from any namespaces to others.
 
 #### List of IP Addresses in this example test environment.
 | Node                | eth 0           | gre1         | vethb         |
-|:--------------------|:----------------|:-------------|:--------------|
+|:--------------------|-------:---------|------:-------|-------:-------|
 | CE1                 | 192.168.0.1/24  | 10.0.0.1/32  | 172.16.0.1/24 |
 | CE2                 | 192.168.0.2/24  | 10.0.0.2/32  | 172.16.0.2/24 |
 | CE3                 | 192.168.0.3/24  | 10.0.0.3/32  | 172.16.0.3/24 |
 | Route/Config Server | 192.168.0.10/24 | 10.0.0.10/32 | none          |
 
 
+Note that how to make a edge network namespace is shown below.
+```bash
+# change edge_addr accordance with nodes.
+edge_addr=172.16.0.1/24
 
-### 3. Edit nante-wan.conf 
+ns=edge-network
+
+ip link add vetha type veth peer name vethb
+ip netns add $ns
+ip link set dev vethb netns $ns
+
+ip link set dev vetha up
+ip netns exec $ns ip link set dev vethb up
+ip netns exec $ns ip link set dev lo up
+ip netns exec $ns ip addr add dev vethb $edge_addr
+```
+
+
+
+### 1. Edit nante-wan.conf 
 
 First of all, clone Nante-WAN repository and edit
 [nante-wan.conf](https://github.com/upa/nante-wan/blob/master/nante-wan.conf)
 
 ```bash
 # at all nodes,
-$ git clone https://github.com/upa/nante-wan.git
-$ cd nante-wan
-$ vim nante-wan.conf
+ce1:$ git clone https://github.com/upa/nante-wan.git
+ce1:$ cd nante-wan
+ce1:$ vim nante-wan.conf
 ```
 
 nante-wan.conf is configuration file for Nante-WAN. Alhtough dozens of
@@ -93,7 +111,7 @@ parameters exist, only a few are important. The nante-wan.conf for
 this example is shown below.
 
 ```
-# Nante-WAN exasmple config file
+# Nante-WAN example config file
 
 [general]
 dmvpn_addr	= 10.0.0.X
@@ -150,14 +168,14 @@ overlay.
 
 At CE nodes,
 ```bash
-$ docker pull upaa/nante-wan-routing
-$ docker pull upaa/nante-wan-portconfig
+ce1:$ docker pull upaa/nante-wan-routing
+ce1:$ docker pull upaa/nante-wan-portconfig
 ```
 
 At the route and config server,
 ```bash
-$ docker pull upaa/nante-wan-route-server
-$ docker pull upaa/nante-wan-config-serger
+server:$ docker pull upaa/nante-wan-route-server
+server:$ docker pull upaa/nante-wan-config-serger
 ```
 
 Roles of the containers are
@@ -192,13 +210,13 @@ nante-wan/start.py does all things to start Nante-WAN at nodes.
 At Config/Route server node,
 ```bash
 # make a directory to store config files.
-$ mkdir html
-$ sudo ./start.py --route-server --config-server --config-dir html nante-wan.conf
+server:$ mkdir html
+server:$ sudo ./start.py --route-server --config-server --config-dir html nante-wan.conf
 ```
 
 At CE nodes,
 ```bash
-$ sudo ./start.py nante-wan.conf
+ce1:$ sudo ./start.py nante-wan.conf
 ```
 
 
@@ -207,7 +225,7 @@ $ sudo ./start.py nante-wan.conf
 start.py shows executing commands like below.
 
 ```bash
-sudo ./start.py nante-wan.conf
+ce2:$ sudo ./start.py nante-wan.conf
 # Setup GRE Interface
 #   wan_interface   : eth0
 #   dmvpn_interface : gre1
@@ -232,7 +250,7 @@ modprobe af_key
 And, you can verify EVPN and IPsec states like following.
 
 ```bash
-$ docker ps
+ce2:$ docker ps
 CONTAINER ID        IMAGE                       COMMAND                  CREATED             STATUS              PORTS               NAMES
 b6b4fdd4e57e        upaa/nante-wan-portconfig   "/bin/sh -c 'bash ..."   2 seconds ago       Up 1 second                             hardcore_bell
 7a461646c69b        upaa/nante-wan-routing      "/bin/sh -c 'bash ..."   2 seconds ago       Up 1 second                             compassionate_bohr
@@ -250,7 +268,7 @@ fxRcd
     2
 
 Total number of neighbors 1
-# exit
+ce2:# exit
 $ docker exec -it 7a ipsec status
 Security Associations (1 up, 0 connecting):
        dmvpn[1]: ESTABLISHED 2 minutes ago, 192.168.0.2[192.168.0.2]...192.168.0.10[192.168.0.10]
@@ -267,4 +285,116 @@ $
 After containers run on all nodes, DMVPN/IPsec overlay is established,
 and BGP EVPN starts VXLAN FDB exchange. Next step is distribuitng
 bridge configuration files to CEs.
+
+CEs try to fetch their configuration files from URL specified by
+**json_url_prefix** on [portconfig] section in nante-wan.conf. The URL
+is **[json_url_prefix]/[dmvpn_addr].json**. For example, CE1 accesses
+*http://10.0.0.10/portconfig/10.0.0.1.json*, and CE2 access
+*http://10.0.0.10/portconfig/10.0.0.2.json*.
+
+The DocumentRoot of config server container is the directory specified
+by **--config-dir** option of start.py. So, *html* in this case (see
+step 3).
+
+
+A bridge configuration example for this environment is shown below.
+As you can see, this file indicates that the port vetha is untagged
+port and it belongs to vlan 99. If an CE has multiple ports or you
+want to configure a port as tagged, please modify the json as you
+might have guessed.
+
+```json
+{
+	"name" : "bridge",
+	"ports" : [
+		{
+		       	"name" : "vetha", 
+			"tagged" : false,
+			"vlans" :  [ 99 ]
+		}
+	]
+}
+```
+
+After place config files in *html/portconfig* directory, bridge
+interfaces on all CE nodes are configured.
+
+At config server,
+```bash
+server:$ cat << EOF > example.json
+heredoc% { "name" : "bridge", "ports" : [ { "name": "vetha", "tagged": false, "vlans": [ 99 ] } ] }
+heredoc% EOF
+server:$ cp example.json html/port/10.0.0.1.json
+server:$ cp example.json html/port/10.0.0.2.json
+server:$ cp example.json html/port/10.0.0.3.json
+```
+
+
+At CE nodes, verify vlan 99 is created and vetha is configured as
+tagged vlan 99.
+
+```bash $ bridge vlan show port vlan ids docker0 1
+PVID Egress Untagged
+
+vetha	 1 Egress Untagged
+	 99 PVID Egress Untagged
+
+bridge	 1 PVID Egress Untagged
+	 99
+
+vxlan99	 1 Egress Untagged
+	 99 PVID Egress Untagged
+```
+
+
+Then, you can ping from any edge network namespaces from others across
+VXLAN over DMVPN overlay.
+
+```bash
+sudo ip netns exec edge-network bash
+ce1:# ifconfig
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 0  bytes 0 (0.0 B)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 0  bytes 0 (0.0 B)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+vethb: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 172.16.0.1  netmask 255.255.255.0  broadcast 0.0.0.0
+        inet6 fe80::845c:d0ff:fe82:2cc6  prefixlen 64  scopeid 0x20<link>
+        ether 86:5c:d0:82:2c:c6  txqueuelen 1000  (Ethernet)
+        RX packets 859  bytes 55960 (55.9 KB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 1295  bytes 115470 (115.4 KB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+ce1:# ping 172.16.0.2
+PING 172.16.0.2 (172.16.0.2) 56(84) bytes of data.
+64 bytes from 172.16.0.2: icmp_seq=1 ttl=64 time=1.39 ms
+^C
+--- 172.16.0.2 ping statistics ---
+1 packets transmitted, 1 received, 0% packet loss, time 0ms
+rtt min/avg/max/mdev = 1.390/1.390/1.390/0.000 ms
+ce1# ping 172.16.0.3
+PING 172.16.0.3 (172.16.0.3) 56(84) bytes of data.
+^C
+--- 172.16.0.3 ping statistics ---
+2 packets transmitted, 0 received, 100% packet loss, time 1005ms
+
+ce1:# ping 172.16.0.3
+PING 172.16.0.3 (172.16.0.3) 56(84) bytes of data.
+64 bytes from 172.16.0.3: icmp_seq=1 ttl=64 time=2.03 ms
+64 bytes from 172.16.0.3: icmp_seq=2 ttl=64 time=0.875 ms
+^C
+--- 172.16.0.3 ping statistics ---
+2 packets transmitted, 2 received, 0% packet loss, time 1001ms
+rtt min/avg/max/mdev = 0.875/1.456/2.038/0.582 ms
+ce1# 
+```
+
+
+
 
