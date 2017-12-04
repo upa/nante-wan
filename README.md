@@ -230,7 +230,7 @@ nante-wan/start.py does all things to start Nante-WAN at nodes.
 
 At the route/config server node,
 ```shell-session
-# make a directory to store config files.
+# make a directory to store CEs' bridge configuration files.
 server:$ mkdir html
 server:$ sudo ./start.py --route-server --config-server --config-dir html nante-wan.conf
 ```
@@ -318,7 +318,7 @@ step 3).
 
 
 An example for bridge configuraiton file for this environment is shown
-below. As you can see, this file indicates that the port vetha is
+below. As you can see, this file indicates that the port 'vetha' is
 untagged port and it belongs to vlan 99. If an CE has multiple ports
 or you want to configure a port as tagged, please modify the json as
 you might have guessed.
@@ -344,9 +344,9 @@ At config server,
 server:$ cat << EOF > example.json
 heredoc% { "name" : "bridge", "ports" : [ { "name": "vetha", "tagged": false, "vlans": [ 99 ] } ] }
 heredoc% EOF
-server:$ cp example.json html/port/10.0.0.1.json
-server:$ cp example.json html/port/10.0.0.2.json
-server:$ cp example.json html/port/10.0.0.3.json
+server:$ cp example.json html/portconfig/10.0.0.1.json
+server:$ cp example.json html/portconfig/10.0.0.2.json
+server:$ cp example.json html/portconfig/10.0.0.3.json
 ```
 
 
