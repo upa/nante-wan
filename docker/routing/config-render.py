@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import re
 import os
 import sys
 import socket
@@ -15,8 +16,14 @@ def config_render_frr_conf(config, of) :
 
     d = { "dmvpn_addr" : config.get("general", "dmvpn_addr")}
 
+    rr_addrs = []
+
     for param in config["routing"] :
         d[param] = config["routing"][param]
+        if re.match(r"rr_addr\d*", param) :
+            rr_addrs.append(config["routing"][param])
+
+    d["rr_addrs"] = rr_addrs
 
     tmp = os.path.join(os.path.dirname(__file__), "templates")
     env = Environment(loader = FileSystemLoader(tmp, encoding = "utf-8"))

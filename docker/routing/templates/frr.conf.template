@@ -23,8 +23,8 @@ router bgp {{ as_number }}
  neighbor evpn-peer remote-as {{ as_number }}
  neighbor evpn-peer update-source {{ dmvpn_interface  }}
  neighbor evpn-peer capability extended-nexthop
- neighbor {{ rr_addr }} peer-group evpn-peer
- !
+ {% for rr_addr in rr_addrs %}neighbor {{ rr_addr }} peer-group evpn-peer
+ {% endfor %}!
  address-family ipv4 unicast
   neighbor evpn-peer activate
   neighbor evpn-peer soft-reconfiguration inbound
