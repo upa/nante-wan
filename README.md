@@ -48,9 +48,9 @@ config server rols can coexist on a single node.
 
 ![Example test environment](https://raw.githubusercontent.com/wiki/upa/nante-wan/fig/nante-wan-test-env.png)
 
-Fig.2 shows an exmaple test environment this README describes. Three
-CE nodes (CE 1 ~ 3) and a server for the route and config server
-roles are Ubuntu 17.10. All nodes are connected to the network
+Fig.2 shows an example test environment this README describes. Three
+CE nodes (CE 1 ~ 3) and a server for the route and config server roles
+are Ubuntu 17.10. All nodes are connected to the network
 192.168.0.0/24 through Ethernet interface 'eth0'. This network
 performs an underlay network, e.g, the Internet.
 
@@ -68,14 +68,14 @@ underlay network. Then you can ping from any namespaces to others.
 
 #### List of IP Addresses in this example test environment.
 | Node                | eth 0           | gre1         | vethb         |
-|:--------------------|-------:---------|------:-------|-------:-------|
+|:--------------------|:----------------|:-------------|:--------------|
 | CE1                 | 192.168.0.1/24  | 10.0.0.1/32  | 172.16.0.1/24 |
 | CE2                 | 192.168.0.2/24  | 10.0.0.2/32  | 172.16.0.2/24 |
 | CE3                 | 192.168.0.3/24  | 10.0.0.3/32  | 172.16.0.3/24 |
 | Route/Config Server | 192.168.0.10/24 | 10.0.0.10/32 | none          |
 
 
-Note that how to make a edge network namespace is shown below.
+Note that how to make an edge network namespace is shown below.
 ```bash
 # change edge_addr accordance with nodes.
 edge_addr=172.16.0.1/24
@@ -108,7 +108,7 @@ ce1:$ vim nante-wan.conf
 
 nante-wan.conf is configuration file for Nante-WAN. Alhtough dozens of
 parameters exist, only a few are important. The nante-wan.conf for
-this example is shown below.
+this example environment is shown below.
 
 ```
 # Nante-WAN example config file
@@ -145,21 +145,25 @@ json_url_prefix = http://10.0.0.10/ebconfig
 bind_port       = 8081
 ```
 
-The most important parameter is *dmvpn_addr*. *dmvpn_addr* parameter
-is different from other nodes. It is *10.0.0.1* on CE1, and *10.0.0.2*
-on the route/config server. *wan_interface* should be changed for a
-proper interface name according as machine environment. If it is
-enp1s0 in your environment, *wan_interface* should be enp1s0.
+The most important parameter is **dmvpn_addr**. **dmvpn_addr**
+parameter is different from other nodes. It is 10.0.0.1 on CE1, and
+10.0.0.2 on the route/config server. **wan_interface** should be
+changed for a proper interface name according as machine
+environment. If it is enp1s0 in your environment, *wan_interface*
+should be enp1s0.
 
 
 Other parameters are identical among all nodes regardless of node
 types (CE, route or config server).
 
-*nhs_nbma_addr* and *nhs_addr* are NHRP configurations. They indicate
-IP addresses of a route server node on underlay (eth0) and DMVPN
-overlay (gre1). *rr_addr* is an IP address that iBGP on CEs connect
-to. Thus, *rr_addr* is also an IP address of a route server on DMVPN
-overlay.
+
+#### Note
+
+**nhs_nbma_addr** and **nhs_addr** are NHRP configurations. They
+indicate IP addresses of a route server node on underlay (eth0) and
+DMVPN overlay (gre1). **rr_addr** is an IP address that iBGP on CEs
+connect to. Thus, rr_addr is also an IP address of a route server on
+DMVPN overlay.
 
 
 
@@ -191,9 +195,16 @@ Roles of the containers are
   StrongSwan. It performs Next Hop Server of NHRP and Route Reflector
   for EVPN/VXLAN.
 
-- config-server:e Config Server Container: It performs Web server to
+- config-server: Config Server Container: It performs Web server to
   distribute configuration files. If a config file is chenged, a
   process notifies the CE using inotify.
+
+
+All containers contains config rendering scripts. These scripts
+generate specific configuration files, for example, frr.conf and IPsec
+configuration, from nante-wan.conf. Therefore, you can only run
+containers with nante-wan.conf to start Nante-WAN without editting
+specific configurations.
 
 
 
@@ -207,7 +218,7 @@ nante-wan/start.py does all things to start Nante-WAN at nodes.
 * run containers
 
 
-At Config/Route server node,
+At the route/config server node,
 ```shell-session
 # make a directory to store config files.
 server:$ mkdir html
@@ -218,8 +229,6 @@ At CE nodes,
 ```
 ce1:$ sudo ./start.py nante-wan.conf
 ```
-
-
 
 
 start.py shows executing commands like below.
@@ -247,7 +256,7 @@ modprobe af_key
 /usr/bin/docker run -dt --rm --privileged --net=host -v /home/upa/work/nante-wan/nante-wan.conf:/etc/nante-wan.conf -v /dev/log:/dev/log upaa/nante-wan-portconfig
 ```
 
-And, you can verify EVPN and IPsec states like following.
+And, you can verify EVPN and IPsec status like following.
 
 ```shell-session
 ce2:$ docker ps
@@ -289,19 +298,20 @@ bridge configuration files to CEs.
 CEs try to fetch their configuration files from URL specified by
 **json_url_prefix** on [portconfig] section in nante-wan.conf. The URL
 is **[json_url_prefix]/[dmvpn_addr].json**. For example, CE1 accesses
-*http://10.0.0.10/portconfig/10.0.0.1.json*, and CE2 access
-*http://10.0.0.10/portconfig/10.0.0.2.json*.
+*http://10.0.0.10/portconfig/10.0.0.1.json*, and CE2 accesses
+*http://10.0.0.10/portconfig/10.0.0.2.json* (10.0.0.10 is dmvpn_addr
+of config server).
 
 The DocumentRoot of config server container is the directory specified
 by **--config-dir** option of start.py. So, *html* in this case (see
 step 3).
 
 
-A bridge configuration example for this environment is shown below.
-As you can see, this file indicates that the port vetha is untagged
-port and it belongs to vlan 99. If an CE has multiple ports or you
-want to configure a port as tagged, please modify the json as you
-might have guessed.
+An example for bridge configuraiton file for this environment is shown
+below. As you can see, this file indicates that the port vetha is
+untagged port and it belongs to vlan 99. If an CE has multiple ports
+or you want to configure a port as tagged, please modify the json as
+you might have guessed.
 
 ```json
 {
@@ -317,7 +327,7 @@ might have guessed.
 ```
 
 After place config files in *html/portconfig* directory, bridge
-interfaces on all CE nodes are configured.
+interfaces on all CE nodes are configured automatically.
 
 At config server,
 ```shell-session
@@ -334,8 +344,9 @@ At CE nodes, verify vlan 99 is created and vetha is configured as
 tagged vlan 99.
 
 ```shell-session
-ce1:$ bridge vlan show port vlan ids docker0 1
-PVID Egress Untagged
+ce1:$ bridge vlan show
+port	vlan ids
+docker0	 1 PVID Egress Untagged
 
 vetha	 1 Egress Untagged
 	 99 PVID Egress Untagged
@@ -399,3 +410,34 @@ ce1#
 
 
 
+### Next Step
+
+#### Adding new CE node
+
+It is very easy. copy the nante-wan.conf to new node, change
+**dmvpn_addr**, and `start.py nante-wan.conf`.
+
+
+#### Changing bridge configuration of CE nodes
+
+Edit portconfig/[CE's dmvpn_addr].json in the config directory in
+your config server.
+
+
+#### Web interface
+
+Nante-WAN does not provide any wev interfaces. But, it is easy to make
+your own web interface. What your web interface must do is, putting
+and updating config json files.
+
+
+#### Firewall
+
+The ebconfig container provides L4 ACL and MAC address filtering
+functions.
+
+
+
+### Contact
+
+upa at haeena.net
