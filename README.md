@@ -440,7 +440,7 @@ your config server.
 
 #### Web interface
 
-Nante-WAN does not provide any wev interfaces. But, it is easy to make
+Nante-WAN does not have any web interfaces. But, it is easy to make
 your own web interface. What your web interface must do is, putting
 and updating config json files.
 
