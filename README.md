@@ -196,7 +196,7 @@ server on DMVPN overlay.
 
 At CE nodes, clone routing and portconfig containers. The routing
 container contains FRRrouting and StrongSwan. The portconfig container
-contains portconfig a daemon that configure bridge interfaces.
+contains a portconfig daemon that configure bridge interfaces.
 
 ```shell-session
 ce1:$ docker pull upaa/nante-wan-routing
