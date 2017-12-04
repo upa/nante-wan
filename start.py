@@ -39,10 +39,10 @@ def setup_gre(config) :
     gre_key = config.get("routing", "gre_key")
     gre_ttl = config.get("routing", "gre_ttl")
 
-    logger.info("Setup GRE Interface")
-    logger.info("  wan_interface   : %s" % wan_interface)
-    logger.info("  dmvpn_interface : %s" % dmvpn_interface)
-    logger.info("  dmvpn_addr      : %s" % dmvpn_addr)
+    logger.info("# Setup GRE Interface")
+    logger.info("#   wan_interface   : %s" % wan_interface)
+    logger.info("#   dmvpn_interface : %s" % dmvpn_interface)
+    logger.info("#   dmvpn_addr      : %s" % dmvpn_addr)
 
     cmds = [
         [ "modprobe", "af_key" ],
@@ -55,7 +55,7 @@ def setup_gre(config) :
 
 
     if os.path.exists("/sys/class/net/%s" % dmvpn_interface) :
-        logger.error("'%s' exists. delete and recreate." % dmvpn_interface)
+        logger.error("#  '%s' exists. delete and recreate." % dmvpn_interface)
         cmds.insert(0, [ ipcmd, "tunnel", "del", dmvpn_interface])
     
 
@@ -65,8 +65,8 @@ def setup_bridge(config) :
 
     br_interface = config.get("portconfig", "br_interface")
     
-    logger.info("Setup Bridge Interface")
-    logger.info("  br_interface : %s" % br_interface)
+    logger.info("# Setup Bridge Interface")
+    logger.info("#   br_interface : %s" % br_interface)
 
     cmds = [
         [ ipcmd, "link", "add", br_interface, "type", "bridge",
@@ -75,7 +75,7 @@ def setup_bridge(config) :
     ]
 
     if os.path.exists("/sys/class/net/%s" %  br_interface) :
-        logger.error("'%s' exists. delete and recreate." % br_interface)
+        logger.error("#  '%s' exists. delete and recreate." % br_interface)
         cmds.insert(0, [ ipcmd, "link", "del", "dev", br_interface ])
 
     run_cmds(cmds)
@@ -83,7 +83,7 @@ def setup_bridge(config) :
 
 def setup_nflog(config) :
 
-    logger.info("Setup NFLOG")
+    logger.info("# Setup NFLOG")
 
     dmvpn_interface = config.get("routing", "dmvpn_interface")
 
@@ -107,7 +107,7 @@ def setup_nflog(config) :
     nflog = "iptables -nL --line-numbers | grep NFLOG"
     for line in subprocess.getoutput([nflog]).split("\n") :
         if not line : continue
-        logger.error("NFLOG rule '%s' exists. sorry, delete it." % line)
+        logger.error("#  NFLOG rule '%s' exists. delete it." % line)
         rulenum = line.split()[0]
         cmds.insert(0, [ iptables, "-D", "FORWARD", rulenum])
 
@@ -116,7 +116,7 @@ def setup_nflog(config) :
 
 def run_containers(option, config, configpath) :
 
-    logger.info("Start Nante-WAN Docker Containers")
+    logger.info("# Start Nante-WAN Docker Containers")
 
     cmds = []
 
