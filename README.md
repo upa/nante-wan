@@ -424,7 +424,7 @@ ce1#
 
 
 
-### Next Step
+### 5. Next Step
 
 #### Adding new CE node
 
@@ -452,6 +452,6 @@ functions.
 
 
 
-### Contact
+## Contact
 
 upa at haeena.net
