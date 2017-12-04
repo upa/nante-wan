@@ -84,7 +84,10 @@ e.g, the Internet.
 Each node has a 'gre1' interface. The 'gre1' interface is an entry
 point to a DMVPN overlay network. Each gre1 interface has a unique /32
 IP address. Those /32 IP addresses on the DMVPN overlay are used for
-messaging between CE nodes, route and config servers.
+messaging between CE nodes, route and config servers. **Note**:
+nante-wan start script creates gre1 interface. In this step,
+you don't need to make gre1 interface by your hand.
+
 
 **Note:** In the example environment, instead of physical ports, we
 use network namespace and veth interface to emulate edge network
@@ -377,7 +380,7 @@ Then, you can ping from any edge network namespaces from others across
 VXLAN over DMVPN overlay.
 
 ```shell-session
-sudo ip netns exec edge-network bash
+ce1:$ sudo ip netns exec edge-network bash
 ce1:# ifconfig
 lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
         inet 127.0.0.1  netmask 255.0.0.0
