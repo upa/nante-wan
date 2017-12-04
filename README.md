@@ -22,22 +22,35 @@ on Ubuntu 17.10. So, you can (easily?) test this yet another SD-WAN in
 your own virtual machine environments.
 
 
+
+## Nante-WAN components
+
 #### Fig.1 Overview of Nante-Wan overlay
 ![Overview of Nante-WAN Overlay](https://raw.githubusercontent.com/wiki/upa/nante-wan/fig/nante-wan-overlay.png)
 
 
-As shown in Fig.1, a Nante-WAN overlay comprises customer edge (CE), a
-route/config server. CEs accommodate edge networks and deliver
-Ethernet frames from the edge networks to distant and proper
-destination CEs. A route server is BGP Route Reflector. A route server
-establishes iBGP connections with all CEs, and exchange EVPN routes as
-a control plane for VXLAN overlays. A config server is an HTTP
-server. CEs do not save their bridging configuraiton. Instead, CEs
-regurarly fetch configuration file from the config server across the
-DMVPN overlay. Moreover, when a configuration file for a CE is
-changed, the config server notify the CE that the configuration file
-is changed, and then the CE try to fetch the file. Route server and
-config server rols can coexist on a single node.
+As shown in Fig.1, a Nante-WAN overlay comprises customer edge (CE)
+nodes, Route Server, and Config Server.
+
+- **CE node**: CE nodes accommodate edge networks and deliver Ethernet
+  frames from the edge networks to distant and proper destination CEs.
+
+- **Route Server**: Route Server is BGP Route Reflector. A route
+  server establishes iBGP connections with all CEs, and exchange EVPN
+  routes as a control plane for VXLAN overlays.
+
+- **Config Server**: Config Server is an HTTP server. CE nodes
+  regurarly fetch bridge configuration files from the config server
+  across the DMVPN overlay. Moreover, when a config file for a CE node
+  is changed, the config server notifies the CE.
+
+
+CE nodes constructs VXLAN over DMVPN overlay using Route Server as
+IPsec anchor, Next Hop Resolation on DMVPN, and RR for EVPN. Bridging
+configuration on CE nodes are centralized in Config Server. Under this
+control, CE nodes deliver Ethernet frames from edge networks to proper
+CE nodes across the Internet.
+
 
 
 
@@ -59,23 +72,16 @@ point to a DMVPN overlay network. Each gre1 interface has a unique /32
 IP address. Those /32 IP addresses on the DMVPN overlay are used for
 messaging between CEs, route and config servers.
 
-In the example environment, all CEs have veth interface pairs and
-network namespaces as edge netweorks (172.16.0.0/24, depicted as
-orange boxes in Fig.2). After the Nante-WAN overlay is Up, all
-namespaces will be connected as a single layer-2 segment across the
-underlay network. Then you can ping from any namespaces to others.
+**Note:** In the example environment, instead of physical ports, we
+use network namespace and veth interface as an edge network
+(172.16.0.0/24, depicted as orange boxes in Fig.2).
+
+After the Nante-WAN overlay is Up, all namespaces will be connected as
+a single layer-2 segment across the underlay network. Then you can
+ping from any namespaces to others.
 
 
-#### List of IP Addresses in this example test environment.
-| Node                | eth 0           | gre1         | vethb         |
-|:--------------------|:----------------|:-------------|:--------------|
-| CE1                 | 192.168.0.1/24  | 10.0.0.1/32  | 172.16.0.1/24 |
-| CE2                 | 192.168.0.2/24  | 10.0.0.2/32  | 172.16.0.2/24 |
-| CE3                 | 192.168.0.3/24  | 10.0.0.3/32  | 172.16.0.3/24 |
-| Route/Config Server | 192.168.0.10/24 | 10.0.0.10/32 | none          |
-
-
-Note that how to make an edge network namespace is shown below.
+How to make an edge network namespace is shown below.
 ```bash
 # change edge_addr accordance with nodes.
 edge_addr=172.16.0.1/24
@@ -91,6 +97,14 @@ ip netns exec $ns ip link set dev vethb up
 ip netns exec $ns ip link set dev lo up
 ip netns exec $ns ip addr add dev vethb $edge_addr
 ```
+
+#### List of IP Addresses in this example test environment.
+| Node                | eth 0           | gre1         | vethb         |
+|:--------------------|:----------------|:-------------|:--------------|
+| CE1                 | 192.168.0.1/24  | 10.0.0.1/32  | 172.16.0.1/24 |
+| CE2                 | 192.168.0.2/24  | 10.0.0.2/32  | 172.16.0.2/24 |
+| CE3                 | 192.168.0.3/24  | 10.0.0.3/32  | 172.16.0.3/24 |
+| Route/Config Server | 192.168.0.10/24 | 10.0.0.10/32 | none          |
 
 
 
