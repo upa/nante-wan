@@ -123,7 +123,7 @@ def run_containers(option, config, configpath) :
     if option.route_server :
         # run route server container
         cmds += [
-            [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
+            [ docker, "run", "-dt", "--privileged", "--net=host",
               "-v", "%s:/etc/nante-wan.conf" % configpath,
               "-v", "/dev/log:/dev/log",
               "upaa/nante-wan-route-server"
@@ -134,12 +134,12 @@ def run_containers(option, config, configpath) :
     else :
         # run as edge device
         cmds += [
-            [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
+            [ docker, "run", "-dt", "--privileged", "--net=host",
               "-v", "%s:/etc/nante-wan.conf" % configpath,
               "-v", "/dev/log:/dev/log",
               "upaa/nante-wan-routing"
             ],
-            [ docker, "run", "-dt", "--rm", "--privileged", "--net=host",
+            [ docker, "run", "-dt", "--privileged", "--net=host",
               "-v", "%s:/etc/nante-wan.conf" % configpath,
               "-v", "/dev/log:/dev/log",
               "upaa/nante-wan-portconfig"
@@ -149,7 +149,7 @@ def run_containers(option, config, configpath) :
     if option.config_server :
         # run config server container
         cmds += [
-            [ docker, "run", "-dt", "--rm", "--net=host",
+            [ docker, "run", "-dt", "--net=host",
               "-v", "%s:/etc/nante-wan.conf" % configpath,
               "-v", "/dev/log:/dev/log",
               "-v", "%s:/var/www/html" % os.path.abspath(option.config_dir),
