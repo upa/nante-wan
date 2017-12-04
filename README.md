@@ -7,52 +7,181 @@ Linux and [FRRouting](https://frrouting.org/). Nante-WAN provides
 NAT-traversal, Multipoint, Encrypted Layer-2 overlay networks by using
 DMVPN (Dynamic Multipoint VPN) and VXLAN.
 
-The data plane of Nante-WAN is VXLAN over DMVPN/IPsec overlay network
-for achieving such functionalities. DMVPN provides multipoint layer-3
-overlay, and IPsec provides packet encryption and
-NAT-traversal. Moreover, VXLAN encapsulates Ethernet frames in IP
-headers, which are inner IP headers of the DMVPN overlay.
+The data plane of Nante-WAN is VXLAN over DMVPN/IPsec overlay network.
+DMVPN provides multipoint layer-3 overlay, and IPsec provides packet
+encryption and NAT-traversal. Moreover, VXLAN encapsulates Ethernet
+frames in IP headers, which are inner IP headers of the DMVPN overlay.
 
 The control plane of Nante-WAN is composed of FRRouting that is a fork
-of Quagga. Nante-WAN uses EVPN for VXLAN FDB exchange and NHRP for
+of Quagga. Nante-WAN uses EVPN for exchanging VXLAN FDB, and NHRP for
 DMVPN.
 
 
-#### Overview of Nante-Wan overlay
+Nante-WAN components are packaged as docker containers, and they run
+on Ubuntu 17.10. So, you can (easily?) test this yet another SD-WAN in
+your own virtual machine environments.
+
+
+#### Fig.1 Overview of Nante-Wan overlay
 ![Overview of Nante-WAN Overlay](https://raw.githubusercontent.com/wiki/upa/nante-wan/fig/nante-wan-overlay.png)
 
 
+As shown in Fig.1, a Nante-WAN overlay comprises customer edge (CE), a
+route/config server. CEs accommodate edge networks and deliver
+Ethernet frames from the edge networks to distant and proper
+destination CEs. A route server is BGP Route Reflector. A route server
+establishes iBGP connections with all CEs, and exchange EVPN routes as
+a control plane for VXLAN overlays. A config server is an HTTP
+server. CEs do not save their bridging configuraiton. Instead, CEs
+regurarly fetch configuration file from the config server across the
+DMVPN overlay. Moreover, when a configuration file for a CE is
+changed, the config server notify the CE that the configuration file
+is changed, and then the CE try to fetch the file. Route server and
+config server rols can coexist on a single node.
 
-## Quick Start
-
-Nante-WAN edge device components are packaged as docker
-containers. So, you can (easily?) test this yet another SD-WAN.
 
 
-### 1. Setup Route Reflector and Next Hop Server
-
-[RR/NHRP description here]
+## Example setup
 
 
-### 2. Prepare a config server (a.k.a orchestrator)
+#### Fig.2 Example test environment.
 
-[Config server description here]
+![Example test environment](https://raw.githubusercontent.com/wiki/upa/nante-wan/fig/nante-wan-test-env.png)
+
+Fig.2 shows an exmaple test environment this README describes. Three
+CE nodes (CE 1 ~ 3) and a server for the route and config server
+roles are Ubuntu 17.10. All nodes are connected to the network
+192.168.0.0/24 through Ethernet interface 'eth0'. This network
+performs an underlay network, e.g, the Internet.
+
+Each node has a 'gre1' interface. The 'gre1' interface is an entry
+point to a DMVPN overlay network. Each gre1 interface has a unique /32
+IP address. Those /32 IP addresses on the DMVPN overlay are used for
+messaging between CEs, route and config servers.
+
+In the example environment, all CEs have veth interface pairs and
+network namespaces as edge netweorks (172.16.0.0/24, depicted on
+orange boxes in Fig.2). After the Nante-WAN overlay is Up, all
+namespaces will be connected as a single layer-2 segment across the
+underlay network. Then you can ping from any namespaces to others.
+
+
+#### List of IP Addresses in this example test environment.
+| Node                | eth 0           | gre1         | vethb         |
+|:--------------------|:----------------|:-------------|:--------------|
+| CE1                 | 192.168.0.1/24  | 10.0.0.1/32  | 172.16.0.1/24 |
+| CE2                 | 192.168.0.2/24  | 10.0.0.2/32  | 172.16.0.2/24 |
+| CE3                 | 192.168.0.3/24  | 10.0.0.3/32  | 172.16.0.3/24 |
+| Route/Config Server | 192.168.0.10/24 | 10.0.0.10/32 | none          |
+
 
 
 ### 3. Edit nante-wan.conf 
 
-[Config file description here]
+First of all, clone Nante-WAN repository and edit
+[nante-wan.conf](https://github.com/upa/nante-wan/blob/master/nante-wan.conf)
 
 ```bash
+# at all nodes,
 $ git clone https://github.com/upa/nante-wan.git
 $ cd nante-wan
 $ vim nante-wan.conf
 ```
 
+nante-wan.conf is configuration file for Nante-WAN. Alhtough dozens of
+parameters exist, only a few are important. The nante-wan.conf for
+this example is shown below.
 
-### 4. Run
+```
+# Nante-WAN exasmple config file
 
-start.py does all things to start nante-wan at CE.
+[general]
+dmvpn_addr	= 10.0.0.X
+
+[config_fetch]
+timeout		= 5
+interval	= 3600
+failed_interval	= 5
+
+[routing]
+wan_interface	= eth0
+dmvpn_interface	= gre1
+as_number	= 65000
+nhs_nbma_addr	= 192.168.0.10
+nhs_addr	= 10.0.0.10
+rr_addr		= 10.0.0.10
+bgp_range	= 10.0.0.0/16
+ipsec_secret	= hogehogemogamoga
+gre_key		= 1
+gre_ttl		= 64
+
+
+[portconfig]
+br_interface	= bridge
+json_url_prefix	= http://10.0.0.10/portconfig
+bind_port	= 8080
+
+[ebconfig]
+br_interface    = bridge
+json_url_prefix = http://10.0.0.10/ebconfig
+bind_port       = 8081
+```
+
+The most important parameter is *dmvpn_addr*. *dmvpn_addr* parameter
+is different from other nodes. It is *10.0.0.1* on CE1, and *10.0.0.2*
+on the route/config server. *wan_interface* should be changed for a
+proper interface name according as machine environment. If it is
+enp1s0 in your environment, *wan_interface* should be enp1s0.
+
+
+Other parameters are identical among all nodes regardless of node
+types (CE, route or config server).
+
+*nhs_nbma_addr* and *nhs_addr* are NHRP configurations. They indicate
+IP addresses of a route server node on underlay (eth0) and DMVPN
+overlay (gre1). *rr_addr* is an IP address that iBGP on CEs connect
+to. Thus, *rr_addr* is also an IP address of a route server on DMVPN
+overlay.
+
+
+
+
+### 2. Pull containers
+
+At CE nodes,
+```bash
+$ docker pull upaa/nante-wan-routing
+$ docker pull upaa/nante-wan-portconfig
+```
+
+At the route and config server,
+```bash
+$ docker pull upaa/nante-wan-route-server
+$ docker pull upaa/nante-wan-config-serger
+```
+
+Roles of the containers are
+
+- routing: Routing Container. It contains FRRouting for EVPN and NHRP,
+  and StrongSwan for IPsec.
+
+- portconfig: Port Configuration Container. This container regularly
+  fetches port configuration file from a config server and configure
+  bridge interfaces in accordance with the file.
+
+- route-server: Route Server Container. It contains FRRouting and
+  StrongSwan. It performs Next Hop Server of NHRP and Route Reflector
+  for EVPN/VXLAN.
+
+- config-server:e Config Server Container: It performs Web server to
+  distribute configuration files. If a config file is chenged, a
+  process notifies the CE using inotify.
+
+
+
+### 3. Run containers
+
+nante-wan/start.py does all things to start Nante-WAN at nodes.
 
 * create GRE interface
 * create Bridge interface
@@ -60,12 +189,82 @@ start.py does all things to start nante-wan at CE.
 * run containers
 
 
+At Config/Route server node,
 ```bash
-$ docker pull upaa/nante-wan-routing
-$ docker pull upaa/nante-wan-portconfig
+# make a directory to store config files.
+$ mkdir html
+$ sudo ./start.py --route-server --config-server --config-dir html nante-wan.conf
+```
 
-# in nante-wan directory
+At CE nodes,
+```bash
 $ sudo ./start.py nante-wan.conf
 ```
 
+
+
+
+start.py shows executing commands like below.
+
+```bash
+sudo ./start.py nante-wan.conf
+# Setup GRE Interface
+#   wan_interface   : eth0
+#   dmvpn_interface : gre1
+#   dmvpn_addr      : 10.0.0.2
+modprobe af_key
+/bin/ip tunnel add gre1 mode gre key 1 ttl 64 dev eth0
+/bin/ip addr flush gre1
+/bin/ip addr add 10.0.0.2/32 dev gre1
+/bin/ip link set gre1 up
+# Setup Bridge Interface
+#   br_interface : bridge
+/bin/ip link add bridge type bridge vlan_filtering 1
+/bin/ip link set dev bridge up
+# Setup NFLOG
+/sbin/iptables -A FORWARD -i gre1 -o gre1 -m hashlimit --hashlimit-upto 4/minute --hashlimit-burst 1 --hashlimit-mode srcip,dstip --hashlimit-srcmask 16 --hashlimit-name loglimit-0 -j NFLOG --nflog-group 1 --nflog-size 128
+/sbin/iptables -P FORWARD ACCEPT
+# Start Nante-WAN Docker Containers
+/usr/bin/docker run -dt --rm --privileged --net=host -v /home/upa/work/nante-wan/nante-wan.conf:/etc/nante-wan.conf -v /dev/log:/dev/log upaa/nante-wan-routing
+/usr/bin/docker run -dt --rm --privileged --net=host -v /home/upa/work/nante-wan/nante-wan.conf:/etc/nante-wan.conf -v /dev/log:/dev/log upaa/nante-wan-portconfig
+```
+
+And, you can verify EVPN and IPsec states like following.
+
+```bash
+$ docker ps
+CONTAINER ID        IMAGE                       COMMAND                  CREATED             STATUS              PORTS               NAMES
+b6b4fdd4e57e        upaa/nante-wan-portconfig   "/bin/sh -c 'bash ..."   2 seconds ago       Up 1 second                             hardcore_bell
+7a461646c69b        upaa/nante-wan-routing      "/bin/sh -c 'bash ..."   2 seconds ago       Up 1 second                             compassionate_bohr
+$ docker exec -it 7a vtysh
+ce2# show bgp l2vpn evpn summary 
+BGP router identifier 10.0.0.2, local AS number 65000 vrf-id 0
+BGP table version 0
+RIB entries 5, using 760 bytes of memory
+Peers 1, using 19 KiB of memory
+Peer groups 1, using 64 bytes of memory
+
+Neighbor        V         AS MsgRcvd MsgSent   TblVer  InQ OutQ  Up/Down State/P
+fxRcd
+10.0.0.10       4      65000       8       6        0    0    0 00:01:18        
+    2
+
+Total number of neighbors 1
+# exit
+$ docker exec -it 7a ipsec status
+Security Associations (1 up, 0 connecting):
+       dmvpn[1]: ESTABLISHED 2 minutes ago, 192.168.0.2[192.168.0.2]...192.168.0.10[192.168.0.10]
+       dmvpn{1}:  INSTALLED, TRANSPORT, reqid 1, ESP SPIs: c86df829_i cf9c192e_o
+       dmvpn{1}:   192.168.0.2/32[gre] === 192.168.0.10/32[gre]
+
+$
+```
+
+
+
+### 4. Put configuration files at config server
+
+After containers run on all nodes, DMVPN/IPsec overlay is established,
+and BGP EVPN starts VXLAN FDB exchange. Next step is distribuitng
+bridge configuration files to CEs.
 
