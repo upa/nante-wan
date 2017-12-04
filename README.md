@@ -72,7 +72,7 @@ hypervisor software you like.
 
 
 In the example test environment shown in Fig.2, there are three VMs
-for as CE nodes (CE 1 ~ 3) and one VM for the route and config server
+as CE nodes (CE 1 ~ 3) and one VM for the route and config server
 roles. All nodes are connected to the network 192.168.0.0/24 through
 Ethernet interface 'eth0'. This network performs an underlay network,
 e.g, the Internet.
