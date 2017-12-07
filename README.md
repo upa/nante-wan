@@ -75,27 +75,26 @@ hypervisor software you like.
 ![Example test environment](https://raw.githubusercontent.com/wiki/upa/nante-wan/fig/nante-wan-test-env.png)
 
 
-In the example test environment shown in Fig.2, there are three VMs
-as CE nodes (CE 1 ~ 3) and one VM for the route and config server
+In the example test environment shown in Fig.2, there are three VMs as
+CE nodes (CE 1 ~ 3) and one VM for the route and config server
 roles. All nodes are connected to the network 192.168.0.0/24 through
-Ethernet interface 'eth0'. This network performs an underlay network,
+Ethernet interface eth0. This network performs an underlay network,
 e.g, the Internet.
 
-Each node has a 'gre1' interface. The 'gre1' interface is an entry
-point to a DMVPN overlay network. Each gre1 interface has a unique /32
-IP address. Those /32 IP addresses on the DMVPN overlay are used for
+Each node has a *gre1* interface. The gre1 interface is an entry point
+to a DMVPN overlay network. Each gre1 interface has a unique /32 IP
+address. Those /32 IP addresses on the DMVPN overlay are used for
 messaging between CE nodes, route and config servers. **Note**:
-nante-wan start script creates gre1 interface. In this step,
-you don't need to make gre1 interface by your hand.
+nante-wan start script creates gre1 interface. In this step, you don't
+need to make gre1 interface by your hand.
 
 
-**Note:** In the example environment, instead of physical ports, we
-use network namespace and veth interface to emulate edge network
-(172.16.0.0/24, depicted as orange boxes in Fig.2).
-
-After the Nante-WAN overlay is Up, all namespaces will be connected as
-a single layer-2 segment across the underlay network. Then you can
-ping from any namespaces to others.
+In the example environment, instead of physical ports, we use network
+namespace and veth interface to emulate edge network (172.16.0.0/24,
+depicted as orange boxes in Fig.2). After the Nante-WAN overlay is
+Up, all namespaces will be connected as a single layer-2 segment
+across the underlay network. Then you can ping from any namespaces to
+others.
 
 
 How to make an edge network namespace is shown below.
@@ -235,6 +234,7 @@ nante-wan/start.py does all things to start Nante-WAN at nodes.
 * create GRE interface
 * create Bridge interface
 * setup NFLOG for NHRP redirect/shortcut
+* setup TCP MSS clamping (1340 byte)
 * run containers
 
 
@@ -271,9 +271,11 @@ modprobe af_key
 # Setup NFLOG
 /sbin/iptables -A FORWARD -i gre1 -o gre1 -m hashlimit --hashlimit-upto 4/minute --hashlimit-burst 1 --hashlimit-mode srcip,dstip --hashlimit-srcmask 16 --hashlimit-name loglimit-0 -j NFLOG --nflog-group 1 --nflog-size 128
 /sbin/iptables -P FORWARD ACCEPT
+# Setup TCP MSS Clamp
+/sbin/iptables -A FORWARD -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --set-mss 1340
 # Start Nante-WAN Docker Containers
-/usr/bin/docker run -dt --rm --privileged --net=host -v /home/upa/work/nante-wan/nante-wan.conf:/etc/nante-wan.conf -v /dev/log:/dev/log upaa/nante-wan-routing
-/usr/bin/docker run -dt --rm --privileged --net=host -v /home/upa/work/nante-wan/nante-wan.conf:/etc/nante-wan.conf -v /dev/log:/dev/log upaa/nante-wan-portconfig
+/usr/bin/docker run -dt --privileged --net=host -v /home/upa/work/nante-wan/nante-wan.conf:/etc/nante-wan.conf -v /dev/log:/dev/log upaa/nante-wan-routing
+/usr/bin/docker run -dt --privileged --net=host -v /home/upa/work/nante-wan/nante-wan.conf:/etc/nante-wan.conf -v /dev/log:/dev/log upaa/nante-wan-portconfig
 ```
 
 And, you can verify EVPN and IPsec status like following.

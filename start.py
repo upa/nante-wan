@@ -48,11 +48,12 @@ def setup_gre(config) :
         [ "modprobe", "af_key" ],
         [ ipcmd, "tunnel", "add", dmvpn_interface , "mode", "gre",
           "key", gre_key, "ttl", gre_ttl, "dev", wan_interface ],
-        [ ipcmd, "addr", "flush", dmvpn_interface],
+        [ ipcmd, "addr", "flush", dmvpn_interface ],
+        [ ipcmd, "addr", "flush", dmvpn_interface ],
         [ ipcmd, "addr", "add", "%s/32" % dmvpn_addr, "dev", dmvpn_interface ],
         [ ipcmd, "link", "set", dmvpn_interface, "up" ],
     ]
-
+    # XXX: ip addr flush gre1 sometimes does not flush addr, so, try twice
 
     if os.path.exists("/sys/class/net/%s" % dmvpn_interface) :
         logger.error("#  '%s' exists. delete and recreate." % dmvpn_interface)
@@ -81,6 +82,9 @@ def setup_bridge(config) :
     run_cmds(cmds)
 
 
+def iptables_ver() :
+    return subprocess.getoutput(["%s -V" % iptables]).strip().split(" ")[1]
+
 def setup_nflog(config) :
 
     logger.info("# Setup NFLOG")
@@ -97,7 +101,9 @@ def setup_nflog(config) :
             "--hashlimit-mode", "srcip,dstip",
             "--hashlimit-srcmask", 16,
             "--hashlimit-name", "loglimit-0",
-            "-j", "NFLOG", "--nflog-group", 1, "--nflog-size", 128
+            "-j", "NFLOG", "--nflog-group", 1,
+            "--nflog-size" if iptables_ver() > "v1.6.0" else "--nflog-range",
+            128
         ],
         [
             iptables, "-P", "FORWARD", "ACCEPT"
@@ -108,6 +114,27 @@ def setup_nflog(config) :
     for line in subprocess.getoutput([nflog]).split("\n") :
         if not line : continue
         logger.error("#  NFLOG rule '%s' exists. delete it." % line)
+        rulenum = line.split()[0]
+        cmds.insert(0, [ iptables, "-D", "FORWARD", rulenum])
+
+    run_cmds(cmds)
+
+def setup_mss_clamp(config) :
+
+    logger.info("# Setup TCP MSS Clamp")
+
+    cmds = [
+        [
+            iptables, "-A", "FORWARD", "-p", "tcp",
+            "--tcp-flags", "SYN,RST", "SYN",
+            "-j", "TCPMSS", "--set-mss", 1340
+        ],
+    ]
+
+    nflog = "iptables -nL --line-numbers | grep TCPMSS"
+    for line in subprocess.getoutput([nflog]).split("\n") :
+        if not line : continue
+        logger.error("#  TCPMSS rule '%s' exists. delete it." % line)
         rulenum = line.split()[0]
         cmds.insert(0, [ iptables, "-D", "FORWARD", rulenum])
 
@@ -213,5 +240,6 @@ if __name__ == "__main__"  :
         setup_gre(config)
         setup_bridge(config)
         setup_nflog(config)
+        setup_mss_clamp(config)
 
     run_containers(option, config, os.path.abspath(args[0]))
