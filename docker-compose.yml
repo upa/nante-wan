@@ -1,23 +1,23 @@
 # docker-compose-yml for nante-wan edge devices
 #
+version: '2'
+services:
+        routing:
+                container_name: routing
+                image: upaa/nante-wan-routing
+                volumes:
+                        - /etc/nante-wan.conf:/etc/nante-wan.conf
+                        - /dev/log:/dev/log
+                privileged: true
+                network_mode: "host"
+                tty: true
 
-routing:
-        container_name: routing
-        image: upaa/nante-wan-routing
-        volumes:
-                - /etc/nante-wan.conf:/etc/nante-wan.conf
-                - /dev/log:/dev/log
-        privileged: true
-        net: "host"
-        tty: true
-
-        
-portconfig:
-        container_name: portconfig
-        image: upaa/nante-wan-portconfig
-        volumes:
-                - /etc/nante-wan.conf:/etc/nante-wan.conf
-                - /dev/log:/dev/log
-        privileged: true
-        net: "host"
+        portconfig:
+                container_name: portconfig
+                image: upaa/nante-wan-portconfig
+                volumes:
+                        - /etc/nante-wan.conf:/etc/nante-wan.conf
+                        - /dev/log:/dev/log
+                privileged: true
+                network_mode: "host"
 
