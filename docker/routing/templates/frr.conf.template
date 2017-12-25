@@ -24,6 +24,8 @@ router bgp {{ as_number }}
  neighbor evpn-peer update-source {{ dmvpn_interface  }}
  neighbor evpn-peer capability extended-nexthop
  {% for rr_addr in rr_addrs %}neighbor {{ rr_addr }} peer-group evpn-peer
+ {% if bgp_password %}neighbor {{ rr_addr }} password {{ bgp_password }}
+ {% endif %}
  {% endfor %}!
  address-family ipv4 unicast
   neighbor evpn-peer activate
