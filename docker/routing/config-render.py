@@ -17,13 +17,18 @@ def config_render_frr_conf(config, of) :
     d = { "dmvpn_addr" : config.get("general", "dmvpn_addr")}
 
     rr_addrs = []
+    nhs_nbma_addrs = []
 
     for param in config["routing"] :
         d[param] = config["routing"][param]
         if re.match(r"rr_addr\d*", param) :
             rr_addrs.append(config["routing"][param])
 
+        if re.match(r"nhs_nbma_addr\d*", param) :
+            nhs_nbma_addrs.append(config["routing"][param])
+
     d["rr_addrs"] = rr_addrs
+    d["nhs_nbma_addrs"] = nhs_nbma_addrs
 
     tmp = os.path.join(os.path.dirname(__file__), "templates")
     env = Environment(loader = FileSystemLoader(tmp, encoding = "utf-8"))

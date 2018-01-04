@@ -10,7 +10,9 @@ interface gre1
  description dmvpn
  ip address {{ dmvpn_addr }}/32
  ip nhrp network-id 1
- ip nhrp nhs {{ nhs_addr }} nbma {{ nhs_nbma_addr }}
+ {% for nhs_nbma_addr in nhs_nbma_addrs %}
+ ip nhrp nhs dynamic nbma {{ nhs_nbma_addr }}
+ {% endfor  %}
  ip nhrp registration no-unique
  ip nhrp shortcut
  tunnel protection vici profile dmvpn
@@ -23,7 +25,8 @@ router bgp {{ as_number }}
  neighbor evpn-peer remote-as {{ as_number }}
  neighbor evpn-peer update-source {{ dmvpn_interface  }}
  neighbor evpn-peer capability extended-nexthop
- {% for rr_addr in rr_addrs %}neighbor {{ rr_addr }} peer-group evpn-peer
+ {% for rr_addr in rr_addrs %}
+ neighbor {{ rr_addr }} peer-group evpn-peer
  {% if bgp_password %}neighbor {{ rr_addr }} password {{ bgp_password }}
  {% endif %}
  {% endfor %}!

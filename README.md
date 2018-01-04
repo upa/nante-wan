@@ -156,7 +156,6 @@ wan_interface	= eth0
 dmvpn_interface	= gre1
 as_number	= 65000
 nhs_nbma_addr	= 192.168.0.10
-nhs_addr	= 10.0.0.10
 rr_addr		= 10.0.0.10
 bgp_range	= 10.0.0.0/16
 ipsec_secret	= hogehogemogamoga
@@ -458,7 +457,10 @@ and updating config json files.
 The ebconfig container provides L4 ACL and MAC address filtering
 functions.
 
+#### Redundancy
 
+Multiple RRs and NHSes are supported. use `nhs_nbma_addrs\d+` and
+`rr_addrs\d+` in your nante-wan.conf
 
 ## Contact
 
