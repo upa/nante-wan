@@ -185,6 +185,16 @@ def run_containers(option, config, configpath) :
         ]
 
     
+    if option.enable_ebconfig :
+        # run ebconfig container
+        cmds += [
+            [ docker, "run", "-dt", "--net=host",
+              "-v", "%s:/etc/nante-wan.conf" % configpath,
+              "-v", "/dev/log:/dev/log",
+              "upaa/nante-wan-ebconfig"
+            ]
+        ]
+
     dockerps = "docker ps | grep upaa/nante-wan"
     for line in subprocess.getoutput([dockerps]).split("\n") :
         if not line : continue
@@ -225,6 +235,11 @@ if __name__ == "__main__"  :
         "--network-only", action = "store_true", default = False,
         dest = "network_only",
         help = "reset network configuration (not start containers)"
+    )
+    parser.add_option(
+        "--enable-ebconfig", action = "store_true", default = False,
+        dest = "enable_ebconfig",
+        help = "run ebconfig container for firewalling"
     )
 
     (option, args) = parser.parse_args()
