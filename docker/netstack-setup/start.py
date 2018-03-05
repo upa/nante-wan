@@ -188,7 +188,7 @@ def run_containers(option, config, configpath) :
     if option.enable_ebconfig :
         # run ebconfig container
         cmds += [
-            [ docker, "run", "-dt", "--net=host",
+            [ docker, "run", "-dt", "--privileged", "--net=host",
               "-v", "%s:/etc/nante-wan.conf" % configpath,
               "-v", "/dev/log:/dev/log",
               "upaa/nante-wan-ebconfig"
