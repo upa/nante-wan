@@ -313,7 +313,7 @@ $
 ### 4. Put configuration files at config server
 
 After containers run on all nodes, DMVPN/IPsec overlay is established,
-and BGP EVPN starts VXLAN FDB exchange. Next step is distribuitng
+and BGP EVPN starts VXLAN FDB exchange. Next step is distributing
 bridge configuration files to CE nodes.
 
 CE nodes try to fetch their configuration files from URL specified by
